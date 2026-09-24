@@ -220,6 +220,7 @@ risk:
   horizon_sec: 4.0
   ttc_scale_sec: 3.0
   conflict_radius: 0.8
+  max_pair_distance: 25.0
   min_history_sec: 0.4
   history_sec: 2.0
   closing_ref: 2.0

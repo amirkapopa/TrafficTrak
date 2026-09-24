@@ -126,8 +126,9 @@ class _Kinematics:
 class RiskEstimator:
     """Causal P(accident starts within the next 5 s) for each frame."""
 
-    def __init__(self, config_path: str | None = None, geometry_path: str | None = None, detector=None):
-        self.cfg = load_config(config_path)
+    def __init__(self, config_path: str | None = None, geometry_path: str | None = None, detector=None,
+                 overrides: dict | None = None):
+        self.cfg = load_config(config_path, overrides)
         self.rc = self.cfg.get("risk", {})
         self.geometry_path = geometry_path or str(geometry_config_path())
         self._detector = detector
@@ -333,8 +334,8 @@ class RiskEstimator:
                 pa, pb = np.array(ka.point), np.array(kb.point)
                 rel = (pb - pa) / s
                 dist = float(np.linalg.norm(rel))
-                if dist > 6.0:
-                    continue
+                if dist > float(rc.get("max_pair_distance", 25.0)):
+                    continue  # coarse cutoff; the TTC horizon does the real gating
                 vel = (np.array(kb.velocity()) - np.array(ka.velocity())) / s
                 vv = float(vel @ vel)
                 if vv < 1e-6 or dist < 1e-6:
