@@ -794,6 +794,26 @@ def rule_accident_near_miss(ctx: SceneContext) -> list[RawEvent]:
     return accidents + near
 
 
+def _parked_party(ctx: SceneContext, pf: PairFeatures, jc: int, moving: float, window: float) -> bool:
+    """True if either party is a parked vehicle: (almost) never moving around the
+    conflict and standing off the carriageway.  Without a ground-plane
+    calibration, perspective makes a car stopping in its lane beside a kerb-side
+    parked car look like a closing conflict."""
+    w = ctx.n(window)
+    for v, idx in ((pf.a, pf.ia), (pf.b, pf.ib)):
+        if v.group == "person":
+            continue
+        i = int(idx[jc])
+        lo, hi = max(0, i - w), min(v.n - 1, i + w)
+        if float(np.mean(v.speed_n[lo:hi + 1] >= moving)) > 0.1:
+            continue
+        p = (float(np.median(v.gx[lo:hi + 1])), float(np.median(v.gy[lo:hi + 1])))
+        road_known = ctx.geometry.has_carriageway or ctx.learned_road_available()
+        if road_known and not ctx.on_road(p, v.tid):
+            return True
+    return False
+
+
 def _near_miss_pair(ctx: SceneContext, pf: PairFeatures, c: dict, acc: list[tuple[float, float]], moving: float) -> list[RawEvent]:
     conflict = (pf.ttc < float(c.get("ttc_threshold", 1.0))) & (pf.closing >= float(c.get("min_closing_speed", 1.5)))
     if not conflict.any():
@@ -809,6 +829,8 @@ def _near_miss_pair(ctx: SceneContext, pf: PairFeatures, c: dict, acc: list[tupl
         if tc <= last_end:
             continue
         if any(s - float(c.get("accident_exclusion_sec", 3.0)) <= tc <= e + float(c.get("accident_exclusion_sec", 3.0)) for s, e in acc):
+            continue
+        if _parked_party(ctx, pf, jc, moving, float(c.get("parked_window_sec", 3.0))):
             continue
         onsets = []
         for v, idx in ((pf.a, pf.ia), (pf.b, pf.ib)):
