@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+# model weights are downloaded by weights/download.sh (yolox_m.onnx > GitHub's 100 MB limit)
+weights/*.onnx
+# generated outputs (curated results are copied to docs/)
+outputs/
+# sample videos are provided by the organisers, not versioned
+samples/*.mp4
+*.mp4
+!docs/**/*.mp4

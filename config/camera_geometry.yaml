@@ -1,0 +1,107 @@
+# =============================================================================
+# TrafficTrak - fixed-camera scene geometry (the ONLY file a human edits to
+# calibrate the scene).
+#
+# STATUS: UNCALIBRATED.  No sample video / samples/camera.md was available when
+# this repository was built, so every geometry list below is intentionally
+# empty.  Rules that need a structure that is not configured here are disabled
+# automatically (they never guess).  Nothing in this file may contain answers
+# for specific videos - only stable facts about the road that are true for
+# every clip filmed by this camera.
+#
+# COORDINATES: all points are NORMALISED image coordinates [x, y] with
+#   x = pixel_x / frame_width, y = pixel_y / frame_height,
+#   origin at the top-left corner, x to the right, y downwards.
+# This keeps the file valid if the evaluation videos are re-encoded at a
+# different resolution.
+#
+# CALIBRATION WORKFLOW (see README.md "Calibrating the scene"):
+#   1. python scripts/analyze_samples.py --videos samples/        (reference frames,
+#      traffic heat-map, learned flow field, traffic-light candidates)
+#   2. python scripts/calibrate_geometry.py html --image outputs/eda/reference_median.jpg
+#      open outputs/calibration/calibrate.html in a browser, click the shapes,
+#      copy the generated YAML snippets into this file.
+#   3. python scripts/calibrate_geometry.py render --image outputs/eda/reference_median.jpg
+#      and review outputs/calibration/geometry_overlay.jpg.
+#   4. set `calibrated: true` below and commit.
+#   5. python -m pytest tests/test_geometry.py   (schema check of this file)
+# =============================================================================
+
+version: 1
+calibrated: false            # set to true only after a human has reviewed the overlay
+reference_frame: null        # optional path of the frame used for calibration (docs only)
+
+# Drivable road surface (union of polygons).  Used by stopped_vehicle,
+# jaywalking, road_obstacle.  When empty, a carriageway mask is learned from
+# vehicle motion (see config/pipeline.yaml -> scene).
+carriageway: []
+#  - [[0.00, 0.55], [1.00, 0.55], [1.00, 1.00], [0.00, 1.00]]
+
+# Areas that look like road but where stationary vehicles / pedestrians are
+# normal (parking bays, bus stops, footpaths).  Suppresses stopped_vehicle,
+# jaywalking and road_obstacle inside them.
+exclusion_zones: []
+sidewalks: []
+
+# Lanes.  `direction` is an ORDERED path (>= 2 points) in the legal driving
+# direction; `group` names the carriageway direction (all lanes of one
+# direction share a group - used by congestion and wrong_way).
+lanes: []
+#  - id: nb_1
+#    group: northbound
+#    polygon: [[0.40, 1.00], [0.50, 1.00], [0.50, 0.55], [0.45, 0.55]]
+#    direction: [[0.45, 0.98], [0.47, 0.57]]
+
+# Stop lines.  `line` has exactly two points.  `approach` is optional: an
+# ordered pair of points giving the direction traffic travels when it crosses
+# the line; if omitted it is taken from the listed lanes' direction.
+# `signal` refers to an id in `signals`.
+stop_lines: []
+#  - id: sl_nb
+#    line: [[0.38, 0.62], [0.55, 0.62]]
+#    lanes: [nb_1]
+#    signal: main
+#    right_turn_on_red: false
+
+# Pedestrian crossings (zebra / signalised).
+crossings: []
+#  - id: cw_north
+#    polygon: [[0.35, 0.56], [0.60, 0.56], [0.60, 0.60], [0.35, 0.60]]
+
+# Intersection box (area between stop lines).  Optional; improves red_light
+# end times and stop_line vs red_light separation.
+intersection: null
+#  [[0.30, 0.40], [0.70, 0.40], [0.70, 0.56], [0.30, 0.56]]
+
+# Traffic-signal heads.  `roi` = [x0, y0, x1, y1] tightly around ONE signal
+# head facing the camera.  `layout` = vertical (red top) or horizontal (red
+# left).  `lamps` lists the lamp colours in layout order.
+signals: []
+#  - id: main
+#    roi: [0.612, 0.081, 0.628, 0.150]
+#    layout: vertical
+#    lamps: [red, amber, green]
+
+# Solid lane markings that must not be crossed (polylines, >= 2 points).
+solid_lines: []
+#  - id: centre_line
+#    points: [[0.50, 1.00], [0.50, 0.55]]
+
+# Prohibited manoeuvres.  A track that is seen in `from` and later in `to`
+# performed the manoeuvre.  label: illegal_turn | illegal_u_turn.
+# (A turn from the wrong lane is expressed with `from` = that lane polygon.)
+prohibited_turns: []
+#  - id: no_left_from_nb
+#    label: illegal_turn
+#    from: [[0.40, 0.70], [0.50, 0.70], [0.50, 0.58], [0.40, 0.58]]
+#    to:   [[0.00, 0.40], [0.25, 0.40], [0.25, 0.52], [0.00, 0.52]]
+#    max_duration_sec: 12
+
+# U-turns.  If `u_turn_prohibited` is true, any detected U-turn on the
+# carriageway is illegal; otherwise only U-turns starting inside one of the
+# `u_turn_prohibited_zones` are reported.
+u_turn_prohibited: false
+u_turn_prohibited_zones: []
+
+# Optional polygons that restrict the static-object (debris) search.
+obstacle_regions: []

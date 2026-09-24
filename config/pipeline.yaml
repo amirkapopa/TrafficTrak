@@ -1,0 +1,238 @@
+# TrafficTrak pipeline configuration: thresholds and switches.
+# Scene geometry lives in camera_geometry.yaml.  All speeds are expressed in
+# "scale units per second", where one scale unit is sqrt(bbox_w * bbox_h) of
+# the object itself (about 2-3 m for a car).  This keeps thresholds roughly
+# independent of perspective depth and resolution.
+
+seed: 0
+
+runtime:
+  # Emergency governor: if the projected processing time exceeds
+  # budget_factor x video duration, the Part A frame stride is increased.
+  # On the target T4 it should never trigger (keeps output deterministic).
+  budget_factor: 2.4
+  prefetch_frames: 48
+
+video:
+  default_fps: 25.0
+  max_consecutive_read_failures: 25
+
+detector:
+  model: auto              # auto | yolox_m | yolox_s | <path to a YOLOX .onnx>
+  prefer_gpu: true
+  score_threshold: 0.10    # low on purpose: ByteTrack also uses low-score boxes
+  nms_iou: 0.55
+  intra_op_threads: 0      # 0 = onnxruntime default
+  min_box_area_frac: 0.00002
+
+part_a:
+  stride_gpu: 2            # process every 2nd frame on a GPU
+  stride_cpu: 3            # every 3rd frame on a CPU-only machine
+
+tracker:
+  high_thresh: 0.45
+  low_thresh: 0.10
+  new_track_thresh: 0.55
+  match_iou: 0.20          # first association (high-score boxes)
+  second_match_iou: 0.45   # second association (low-score boxes)
+  unconfirmed_match_iou: 0.30
+  max_lost_sec: 1.5
+  min_track_sec: 0.8
+  min_observations: 3
+  stitch_max_gap_sec: 8.0  # re-link fragments of the same stationary object
+  stitch_min_iou: 0.45
+
+features:
+  smooth_sigma_sec: 0.35
+  stationary_speed: 0.12
+  moving_speed: 0.40
+  crawl_speed: 1.00
+  footprint_band: 0.35     # bottom fraction of the box used as ground footprint
+
+scene:
+  flow_grid: [32, 18]
+  occupancy_grid: [64, 36]
+  flow_bins: 16
+  min_flow_displacement: 0.25   # scale units per vote step
+  prior_path: config/scene_prior.npz
+  background_path: config/background_reference.png
+  prior_weight: 1.0
+  carriageway_min_tracks: 3
+  direction_group_min_share: 0.12
+  direction_group_min_separation_deg: 60
+
+signal:
+  sample_every_sec: 0.2
+  dominance_ratio: 1.35
+  min_lamp_brightness: 120
+  smooth_window_sec: 1.0
+  min_reliability: 0.6     # fraction of samples with a known state
+
+classes:
+  accident:
+    enabled: true
+    vehicle_classes: [car, bus, truck, motorcycle, bicycle, person]
+    min_closing_speed: 1.0
+    depth_tolerance: 0.45
+    contact_gap: 0.1         # raw-footprint gap (scale units) still counted as contact
+    struck_velocity_jolt: 0.3   # |dv| of the struck party within 0.5 s (smoothed speeds, scale units/s)
+    decel_drop: 1.0
+    decel_drop_frac: 0.5
+    heading_jolt_deg: 25
+    impact_window_sec: 1.0
+    post_slow_sec: 2.0
+    stop_hold_sec: 1.0
+    max_duration_sec: 60
+    single_vehicle: false
+  near_miss:
+    enabled: true
+    ttc_threshold: 1.0
+    min_closing_speed: 1.5
+    min_speed_before: 1.0
+    decel_threshold: 2.0     # scale units / s^2
+    swerve_rate_deg: 35
+    sustain_sec: 0.3
+    evasive_window_before_sec: 2.5
+    evasive_window_after_sec: 0.5
+    clear_gap: 0.5
+    clear_closing_speed: 0.2
+    max_duration_sec: 8
+    accident_exclusion_sec: 3.0
+  red_light:
+    enabled: true
+    red_grace_sec: 0.4
+    enter_within_sec: 3.0
+    exit_distance: 6.0
+    front_offset_frac: 0.5
+  wrong_way:
+    enabled: true
+    vehicle_classes: [car, bus, truck, motorcycle]
+    min_angle_deg: 135
+    min_duration_sec: 1.5
+    min_path: 3.0
+    auto_min_support: 6
+    auto_min_concentration: 0.85
+    auto_min_qualified_frac: 0.6
+  illegal_u_turn:
+    enabled: true
+    min_turn_deg: 150
+    onset_deg: 20
+    max_duration_sec: 15
+    min_moving_frac: 0.6
+  stopped_vehicle:
+    enabled: true
+    vehicle_classes: [car, bus, truck, motorcycle]
+    min_duration_sec: 10.0
+    displacement_window_sec: 1.0
+    max_displacement: 0.25
+    gap_fill_sec: 1.0
+    queue_radius: 6.0
+    passers_min: 2
+    queue_frac: 0.5
+    isolated_min_duration_sec: 45.0
+    stop_line_radius: 3.0
+  jaywalking:
+    enabled: true
+    use_learned_carriageway: false   # precision: require a calibrated carriageway
+    min_duration_sec: 1.0
+    road_margin: 0.15                # scale units inside the carriageway edge
+    rider_overlap: 0.3
+  failure_to_yield:
+    enabled: true
+    entering_buffer: 0.6             # scale units around the crossing polygon
+    max_ped_distance: 8.0
+    min_vehicle_speed: 0.4
+  illegal_turn:
+    enabled: true
+    onset_deg: 15
+    stable_rate_deg: 12
+    max_duration_sec: 12
+  solid_line_crossing:
+    enabled: true
+    wheel_inset: 0.15
+    max_duration_sec: 8
+    confirm_sec: 0.5
+  stop_line:
+    enabled: true
+    stop_hold_sec: 1.0
+    max_past_line: 1.5
+  congestion:
+    enabled: true
+    bin_sec: 1.0
+    min_vehicles: 6
+    capacity_frac: 0.5
+    slow_frac: 0.7
+    gap_fill_sec: 5.0
+    min_duration_sec: 30.0
+  road_obstacle:
+    enabled: true
+    animals: true
+    animal_min_duration_sec: 1.0
+    static_objects: true             # needs a calibrated carriageway or obstacle_regions
+    sample_every_sec: 0.5
+    work_width: 320
+    block: 8
+    ncc_changed: 0.45
+    abs_changed: 28
+    static_ncc: 0.8
+    min_static_sec: 3.0
+    min_blocks: 2
+    max_area_frac: 0.05
+    learn_background_sec: 12.0
+  fire_smoke:
+    enabled: true
+    mode: auto          # auto (classifier if weights exist) | classifier | heuristic | off
+    classifier_path: weights/fire_smoke.onnx
+    classifier_input: [224, 224]
+    classifier_mean: [0.485, 0.456, 0.406]
+    classifier_std: [0.229, 0.224, 0.225]
+    classifier_rgb: true
+    classifier_positive_indices: [0, 1]
+    classifier_threshold: 0.8
+    sample_every_sec: 0.5
+    min_duration_sec: 2.0
+    heuristic_min_area_frac: 0.0015
+    heuristic_flicker_frac: 0.25
+
+segments:
+  merge_gap_sec:
+    default: 1.0
+    accident: 2.0
+    near_miss: 0.5
+    stopped_vehicle: 3.0
+    congestion: 8.0
+    jaywalking: 1.0
+    road_obstacle: 3.0
+    fire_smoke: 4.0
+  min_duration_sec:
+    default: 0.5
+    stopped_vehicle: 10.0
+    congestion: 20.0
+    accident: 0.5
+    near_miss: 0.4
+    road_obstacle: 1.0
+    fire_smoke: 2.0
+  decimals: 3
+
+risk:
+  detect_every_gpu: 1
+  detect_every_cpu: 3
+  horizon_sec: 4.0
+  ttc_scale_sec: 3.0
+  conflict_radius: 0.8
+  min_history_sec: 0.4
+  history_sec: 2.0
+  closing_ref: 2.0
+  decel_ref: 2.5
+  swerve_ref_deg: 40
+  bias: -4.0
+  w_conflict: 3.0
+  w_evasive: 2.0
+  w_violation: 1.5
+  w_interaction: 1.5
+  tau_up_sec: 0.3
+  tau_down_sec: 2.0
+  arm_threshold: 0.5
+  arm_hold_sec: 0.3
+  disarm_threshold: 0.3
+  unarmed_cap: 0.49
