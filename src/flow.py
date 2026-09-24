@@ -35,6 +35,7 @@ class FlowField:
         self.occ = np.zeros((self.oh, self.ow), dtype=np.float64)
         self._contrib: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
         self._occ_dil: np.ndarray | None = None
+        self.rel_frac = 0.25  # carriageway = at least this share of the busiest (p90) cells
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -131,10 +132,19 @@ class FlowField:
             ys, xs = own // self.ow, own % self.ow
             if np.any((np.abs(ys - oy) <= 1) & (np.abs(xs - ox) <= 1)):
                 count -= 1.0
-        return count >= min_tracks
+        return count >= self.road_threshold(min_tracks)
+
+    def road_threshold(self, min_tracks: float) -> float:
+        """Absolute floor, raised to ``rel_frac`` x p90 of occupied cells so the
+        threshold scales when a multi-video prior inflates all counts (kerb-side
+        cells next to a busy lane stay off-road)."""
+        occ = self._occ_dilated()
+        nz = occ[occ > 0]
+        rel = self.rel_frac * float(np.percentile(nz, 90)) if nz.size else 0.0
+        return max(float(min_tracks), rel)
 
     def carriageway_mask(self, min_tracks: float) -> np.ndarray:
-        return self._occ_dilated() >= min_tracks
+        return self._occ_dilated() >= self.road_threshold(min_tracks)
 
     def direction_groups(self, min_share: float = 0.12, min_sep_deg: float = 60.0) -> list[float]:
         """Principal traffic directions of the scene (angles, radians)."""

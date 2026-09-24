@@ -54,7 +54,7 @@ detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 # Python 3.10+ ; GPU box with CUDA 12 + cuDNN 9 (onnxruntime-gpu)
 pip install -r requirements.txt -r requirements-dev.txt     # CPU only: requirements-cpu.txt
 bash weights/download.sh                                      # 137 MB, SHA-256 verified; do this BEFORE going offline
-make check                                                    # ruff + 65 unit tests
+make check                                                    # ruff + 66 unit tests
 
 # put the organisers' videos + camera.md into samples/, and run_submission.py / evaluate.py into the repo root
 make predict        # solution.detect_events on every sample -> predictions_samples.json
@@ -288,6 +288,14 @@ a background thread. If a machine turns out slower than budget, set
 * **Congestion** in a video that is jammed from start to finish has no
   free-flow reference in its own tracks. It still fires, because thresholds
   are absolute plus relative, but the start is the video start.
+* **Overhead cameras.** COCO-trained YOLOX rarely detects vehicles seen from
+  directly above. If the challenge camera looks straight down, the detector
+  must be swapped for one trained on aerial or top-down traffic data.
+  `src/detection.py` accepts any YOLOX-format ONNX model via `detector.model`.
+* **Learned direction needs a majority.** Without calibrated lanes,
+  `wrong_way` abstains wherever less than 85 % of a cell's traffic agrees on a
+  direction. Building the scene prior from the samples (`make prior`) fixes
+  this in practice.
 * **Small or distant objects** are missed at 640×640 input. Pedestrians far
   from the camera and debris are the weakest cases.
 * **Same-class merging:** simultaneous events of one class, for example two
@@ -299,7 +307,7 @@ a background thread. If a machine turns out slower than budget, set
 make check     # ruff (pyflakes, pycodestyle, bugbear, isort, pyupgrade) + pytest
 ```
 
-The 65 tests cover:
+The 66 tests cover:
 * geometry: normalised conversion, containment, crossings, config validation
   and safe defaults;
 * at least one synthetic trajectory scenario per event class, including
@@ -312,9 +320,20 @@ The 65 tests cover:
 * signal classification, tracker identity and low-score rescue, YOLOX
   decoding, strided decoding, local metrics and the demo.
 
-The whole pipeline also ran on real CCTV footage, OpenCV's `vtest.avi`, a
-fixed-camera pedestrian scene: no false events, maximum risk 0.09. It
-handled a corrupt AVI and a missing file gracefully.
+**Real-footage checks** (clips used locally only, not redistributed):
+
+| clip | result |
+|---|---|
+| OpenCV `vtest.avi`: fixed camera, pedestrian plaza, 79.5 s | no events, maximum risk 0.09 |
+| `ahmetozlu/vehicle_counting_tensorflow` `input_video.mp4` (MIT): angled street camera, parked cars, 37.7 s | 20 tracks, no events; parked kerb-side cars correctly *not* reported as `stopped_vehicle` |
+| same clip with seconds 8–20 appended **time-reversed** after 25 s, plus a scene prior learned from the original clip | exactly one `wrong_way` at 25.17–36.92 s (true start 24.99 s) |
+| `andrewssobral/simple_vehicle_counting` `video.avi`: near-overhead highway view, 320×176 | the COCO detector barely sees cars from directly above (see limitations) |
+
+These checks found and fixed two real false positives:
+* a car stopping beside a kerb-side parked car was flagged as a `near_miss`, because perspective made them look like they were closing on each other;
+* a fixed learned-road threshold that failed once a prior inflated the counts.
+
+Corrupt AVIs and missing files are handled gracefully.
 
 ## Local labels and evaluation
 

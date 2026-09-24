@@ -180,6 +180,7 @@ def analyze_tracks(tracks, cfg: dict, geometry: Geometry, width: int, height: in
     tracks = stitch_stationary(list(tracks), float(tc.get("stitch_max_gap_sec", 8.0)), float(tc.get("stitch_min_iou", 0.45)))
     series = build_all_series(tracks, dt, cfg)
     flow = FlowField.from_config(cfg)
+    flow.rel_frac = float(cfg.get("scene", {}).get("carriageway_rel_frac", 0.25))
     moving = float(cfg.get("features", {}).get("moving_speed", 0.4))
     for s in series:
         flow.add_series(s, width, height, moving)

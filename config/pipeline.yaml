@@ -58,6 +58,7 @@ scene:
   background_path: config/background_reference.png
   prior_weight: 1.0
   carriageway_min_tracks: 3
+  carriageway_rel_frac: 0.25     # ... and at least 25 % of the p90 cell count (scales with the prior)
   direction_group_min_share: 0.12
   direction_group_min_separation_deg: 60
 
@@ -96,6 +97,7 @@ classes:
     evasive_window_after_sec: 0.5
     clear_gap: 0.5
     clear_closing_speed: 0.2
+    parked_window_sec: 3.0   # a party that stays still and off-road this long around the conflict is parked
     max_duration_sec: 8
     accident_exclusion_sec: 3.0
   red_light:

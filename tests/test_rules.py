@@ -281,3 +281,13 @@ def test_disabled_class_is_never_emitted(label):
     wrong = make_track(99, "car", linear((W, 400), (-300, 0), 31), 31, 31 + W / 300)
     events, _, _ = run(normal + [wrong], 40.0, overrides={"classes": {label: {"enabled": False}}})
     assert label not in labels(events)
+
+
+def test_stopping_beside_a_kerb_parked_car_is_not_a_near_miss():
+    """Regression from real footage: perspective made a car stopping in its lane
+    look like it was closing on a car parked at the kerb (off the carriageway)."""
+    geo = {"carriageway": [norm([(0, 300), (900, 300), (900, 720), (0, 720)])]}
+    parked = make_track(1, "car", linear((1000, 450), (0, 0), 0), 0, 12)          # off-road, kerb side
+    stopper = make_track(2, "car", piecewise([(0, 300, 450), (2.0, 800, 450), (2.5, 830, 450), (12, 830, 450)]), 0, 12)
+    events, _, _ = run([parked, stopper], 14.0, geometry=geo)
+    assert "near_miss" not in labels(events)
