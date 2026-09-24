@@ -1,0 +1,7 @@
+.git
+outputs
+samples/*.mp4
+weights/*.onnx
+**/__pycache__
+.pytest_cache
+.ruff_cache

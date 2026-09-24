@@ -17,3 +17,6 @@ ignore = ["B905"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/calibrate_geometry.py" = ["E501"]  # embedded single-file HTML/JS tool

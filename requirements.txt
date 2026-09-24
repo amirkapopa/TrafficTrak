@@ -1,0 +1,8 @@
+# Evaluation runtime (Python 3.10+).  GPU build of onnxruntime: CUDA 12 + cuDNN 9.
+# It also contains the CPU execution provider; on CPU-only machines you may
+# use requirements-cpu.txt instead.
+numpy==1.26.4
+opencv-python-headless==4.10.0.84
+onnxruntime-gpu==1.19.2
+scipy==1.13.1
+PyYAML==6.0.2
