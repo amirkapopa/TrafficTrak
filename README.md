@@ -62,6 +62,19 @@ make validate       # own schema checks + `python evaluate.py --pred predictions
 python run_submission.py ...   # the organisers' harness (unchanged; see its own usage)
 ```
 
+**macOS (Apple Silicon or Intel, CPU only)**: use Python 3.11 or 3.12. The
+pinned NumPy and SciPy have no Python 3.13 wheels.
+
+```bash
+brew install python@3.11 git
+git clone https://github.com/amirkapopa/TrafficTrak && cd TrafficTrak
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-cpu.txt -r requirements-dev.txt -r requirements-demo.txt
+bash weights/download.sh                 # works with macOS bash 3.2 + shasum
+python solution.py path/to/video.mp4     # prints the detected events as JSON
+streamlit run demo/app.py                # upload page at http://localhost:8501
+```
+
 Visual outputs, EDA, calibration and the demo:
 
 ```bash
