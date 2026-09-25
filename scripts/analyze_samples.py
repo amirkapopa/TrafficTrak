@@ -112,6 +112,8 @@ def main() -> int:
         for s in series:
             flow.add_series(s, meta.width, meta.height, moving)
             global_flow.add_series(s, meta.width, meta.height, moving)
+            global_flow.add_stops(s, meta.width, meta.height, float(cfg["features"]["stationary_speed"]),
+                                  float(cfg["scene"].get("stop_zone_min_sec", 3.0)))
             pts = s.ground() * np.array([ref_size[0] / meta.width, ref_size[1] / meta.height])
             if s.group in ("vehicle", "two_wheeler"):
                 veh_pts.extend(pts[::3])
@@ -173,7 +175,8 @@ def main() -> int:
         sc = cfg["scene"]
         prior = resolve_path(sc["prior_path"])
         global_flow.save(prior)
-        cv2.imwrite(str(resolve_path(sc["background_path"])), ref)
+        bg = cv2.resize(ref, (1920, int(round(ref.shape[0] * 1920 / ref.shape[1])))) if ref.shape[1] > 1920 else ref
+        cv2.imwrite(str(resolve_path(sc["background_path"])), bg, [cv2.IMWRITE_JPEG_QUALITY, 90])
         print(f"wrote scene prior {prior} ({global_flow.n_tracks} tracks) and background reference", file=sys.stderr)
     print(f"EDA written to {out}", file=sys.stderr)
     return 0

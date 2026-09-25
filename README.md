@@ -12,19 +12,25 @@ detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 ```
 
 > **Status of the challenge inputs.** The organisers' `run_submission.py`
-> and `evaluate.py` (WIUT Hackathon 2026 starter kit) are in the repository
-> root, **unmodified**. The starter README and the `solution.py` template are
-> kept for reference in `docs/challenge/`. Still missing: `samples/*.mp4`,
-> `samples/camera.md`, the starter `examples/` folder and the task description.
-> Until they arrive:
-> * `config/camera_geometry.yaml` ships **empty and uncalibrated**. No lane
->   coordinates were invented. Rules that need a stop line, crossing,
->   signal or marking stay silent until a human calibrates them
->   ([Calibrating the scene](#calibrating-the-scene)).
-> * `predictions_samples.json` and `config/scene_prior.npz` do not exist yet.
->   Create them with `make prior predict` once the videos are in `samples/`.
-
----
+> and `evaluate.py` are in the repository root, **unmodified**. The starter
+> README, `solution.py` template and `examples/` are kept for reference. The
+> sample videos are 4K clips (3840×2160, 29.97 fps) of a signal-controlled
+> intersection in Tashkent. They are too large for git (about 2.4 GB each); a
+> 2-minute sample (`clip_C3905.mp4`) is attached to the
+> [`samples` release](https://github.com/amirkapopa/TrafficTrak/releases/tag/samples).
+> From it:
+> * the camera was verified to be **fixed**: 0 px shift, 0° rotation and
+>   scale 1.000 across the clip;
+> * `config/camera_geometry.yaml` was **calibrated**: 3 zebra crossings,
+>   pedestrian islands, and the carriageway where vehicles actually drive;
+> * `config/scene_prior.npz` holds the learned traffic directions, the road
+>   area and the normal stopping places;
+> * `config/background_reference.jpg` is the empty-road background;
+> * `predictions_samples.json` is the official harness output on that clip.
+>
+> `camera.md` and the task description were not available, so stop lines and
+> signal phases stay uncalibrated. `red_light` and `stop_line` therefore stay
+> silent.
 
 ## How the organisers run this submission
 
@@ -68,7 +74,7 @@ python evaluate.py --pred predictions.json --gt ground_truth.json
 # Python 3.10+ ; GPU box with CUDA 12 + cuDNN 9 (onnxruntime-gpu)
 pip install -r requirements.txt -r requirements-dev.txt     # CPU only: requirements-cpu.txt
 bash weights/download.sh                                      # 137 MB, SHA-256 verified; do this BEFORE going offline
-make check                                                    # ruff + 66 unit tests
+make check                                                    # ruff + 69 unit tests
 
 # with the sample videos + camera.md in samples/
 make prior          # learn the scene prior (traffic directions, road area) from the samples
@@ -242,7 +248,7 @@ lines, crossings, the signal head, solid markings and prohibited manoeuvres
 
 **Learned scene prior.** `make prior` accumulates the direction field and
 carriageway occupancy of all sample videos into `config/scene_prior.npz`. It
-also saves an empty-road background, `config/background_reference.png`. Both
+also saves an empty-road background, `config/background_reference.jpg`. Both
 describe where and in which direction traffic normally moves. They store no
 events, and are merged into each test video's own flow field.
 
@@ -340,7 +346,7 @@ a background thread. If a machine turns out slower than budget, set
 make check     # ruff (pyflakes, pycodestyle, bugbear, isort, pyupgrade) + pytest
 ```
 
-The 66 tests cover:
+The 69 tests cover:
 * geometry: normalised conversion, containment, crossings, config validation
   and safe defaults;
 * at least one synthetic trajectory scenario per event class, including
@@ -353,6 +359,31 @@ The 66 tests cover:
   only future frames differ);
 * signal classification, tracker identity and low-score rescue, YOLOX
   decoding, strided decoding, local metrics and the demo.
+
+**The organisers' sample camera** (`clip_C3905.mp4`, 127.6 s, 4K). The first
+run produced 6 events, which on inspection were all false:
+* cars waiting at red lights;
+* queued cars pulling away on green;
+* two distant cars overlapping in the image;
+* a 60 s red-light queue reported as congestion.
+
+After calibrating the crossings, a first version of `failure_to_yield` fired
+about 70 times. The fixes, each covered by a regression test:
+* **near_miss:** braking only (turning is not swerving), plus a collision-course check;
+* **accident:** the vehicles must stop together after contact;
+* **stopped_vehicle:** "normal stopping places" learned from other vehicles are excluded;
+* **congestion:** must last at least 90 s;
+* **accident / near_miss:** ignore far-field vehicles;
+* **failure_to_yield:** only a walking pedestrian well onto the zebra, within
+  1.5 vehicle lengths in front of a moving vehicle.
+
+The final output is 5 events:
+* 4 `failure_to_yield`: cars turning through the lower crossing while
+  pedestrians walk on it;
+* 1 `jaywalking`: a person standing in the avenue lanes.
+
+Official harness: 256 s against a 383 s budget on a 4-core CPU, VALID, no
+false risk alarms.
 
 **Real-footage checks** (clips used locally only, not redistributed):
 

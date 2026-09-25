@@ -1,107 +1,205 @@
 # =============================================================================
-# TrafficTrak - fixed-camera scene geometry (the ONLY file a human edits to
-# calibrate the scene).
+# TrafficTrak - fixed-camera scene geometry for the WIUT Hackathon 2026 camera
+# (4K view of a signal-controlled intersection on a divided avenue, Tashkent).
 #
-# STATUS: UNCALIBRATED.  No sample video / samples/camera.md was available when
-# this repository was built, so every geometry list below is intentionally
-# empty.  Rules that need a structure that is not configured here are disabled
-# automatically (they never guess).  Nothing in this file may contain answers
-# for specific videos - only stable facts about the road that are true for
-# every clip filmed by this camera.
+# CALIBRATED from the organisers' sample clip C3905 (3840x2160, 29.97 fps); the
+# camera is fixed (feature registration across the clip: 0 px shift, 0 deg
+# rotation, scale 1.000), so this geometry holds for every video it records.
+#   * crossings  - measured on the painted zebras (outline grown by ~10 px @1080p)
+#   * sidewalks  - pedestrian refuge islands (3 pink triangles, median tip)
+#   * carriageway - derived from where the 191 tracked vehicles of the sample
+#                   actually drove (config/scene_prior.npz), eroded ~10 px off
+#                   the kerbs: conservative, it only covers road that is driven
+# Not calibrated (left empty on purpose, rules stay silent rather than guess):
+#   stop lines / signal phases (red_light, stop_line), lanes, solid lines,
+#   prohibited turns.  Review with:
+#   python scripts/calibrate_geometry.py render --image docs/assets/camera_reference.jpg
 #
-# COORDINATES: all points are NORMALISED image coordinates [x, y] with
-#   x = pixel_x / frame_width, y = pixel_y / frame_height,
-#   origin at the top-left corner, x to the right, y downwards.
-# This keeps the file valid if the evaluation videos are re-encoded at a
-# different resolution.
-#
-# CALIBRATION WORKFLOW (see README.md "Calibrating the scene"):
-#   1. python scripts/analyze_samples.py --videos samples/        (reference frames,
-#      traffic heat-map, learned flow field, traffic-light candidates)
-#   2. python scripts/calibrate_geometry.py html --image outputs/eda/reference_median.jpg
-#      open outputs/calibration/calibrate.html in a browser, click the shapes,
-#      copy the generated YAML snippets into this file.
-#   3. python scripts/calibrate_geometry.py render --image outputs/eda/reference_median.jpg
-#      and review outputs/calibration/geometry_overlay.jpg.
-#   4. set `calibrated: true` below and commit.
-#   5. python -m pytest tests/test_geometry.py   (schema check of this file)
+# COORDINATES are normalised: x = px / width, y = px / height (origin top-left).
+# Schema and field documentation: see the comments in git history of this file
+# or README.md "Calibrating the scene".
 # =============================================================================
-
 version: 1
-calibrated: false            # set to true only after a human has reviewed the overlay
-reference_frame: null        # optional path of the frame used for calibration (docs only)
-
-# Drivable road surface (union of polygons).  Used by stopped_vehicle,
-# jaywalking, road_obstacle.  When empty, a carriageway mask is learned from
-# vehicle motion (see config/pipeline.yaml -> scene).
-carriageway: []
-#  - [[0.00, 0.55], [1.00, 0.55], [1.00, 1.00], [0.00, 1.00]]
-
-# Areas that look like road but where stationary vehicles / pedestrians are
-# normal (parking bays, bus stops, footpaths).  Suppresses stopped_vehicle,
-# jaywalking and road_obstacle inside them.
+calibrated: true
+reference_frame: docs/assets/camera_reference.jpg
+carriageway:
+- - [0.0536, 0.0722]
+  - [0.0526, 0.1157]
+  - [0.0609, 0.1602]
+  - [0.0521, 0.1954]
+  - [0.0531, 0.2861]
+  - [0.0703, 0.3194]
+  - [0.1031, 0.3269]
+  - [0.1266, 0.3648]
+  - [0.149, 0.4583]
+  - [0.201, 0.4972]
+  - [0.2141, 0.5167]
+  - [0.2323, 0.525]
+  - [0.2453, 0.5444]
+  - [0.2635, 0.5528]
+  - [0.2891, 0.5972]
+  - [0.3063, 0.6046]
+  - [0.3203, 0.625]
+  - [0.3375, 0.6324]
+  - [0.3516, 0.6528]
+  - [0.4042, 0.6917]
+  - [0.4172, 0.7111]
+  - [0.4526, 0.7056]
+  - [0.4646, 0.712]
+  - [0.4724, 0.7278]
+  - [0.4786, 0.7657]
+  - [0.5094, 0.7713]
+  - [0.5266, 0.7944]
+  - [0.5698, 0.7917]
+  - [0.5813, 0.8093]
+  - [0.5833, 0.838]
+  - [0.5734, 0.8639]
+  - [0.5411, 0.8722]
+  - [0.5245, 0.9037]
+  - [0.4802, 0.8991]
+  - [0.4583, 0.9333]
+  - [0.3896, 0.9259]
+  - [0.3594, 0.9537]
+  - [0.0458, 0.9537]
+  - [0.038, 0.9611]
+  - [0.0365, 0.9991]
+  - [0.4474, 0.9991]
+  - [0.4495, 0.9759]
+  - [0.4625, 0.9574]
+  - [0.5036, 0.9611]
+  - [0.5255, 0.9269]
+  - [0.5677, 0.9324]
+  - [0.5755, 0.8972]
+  - [0.5943, 0.8787]
+  - [0.6359, 0.8852]
+  - [0.6438, 0.9]
+  - [0.649, 0.9306]
+  - [0.6979, 0.9676]
+  - [0.7073, 0.9991]
+  - [0.9995, 0.9991]
+  - [0.9995, 0.8981]
+  - [0.9589, 0.8944]
+  - [0.9292, 0.8463]
+  - [0.9078, 0.8352]
+  - [0.8932, 0.8083]
+  - [0.8911, 0.7824]
+  - [0.9005, 0.7481]
+  - [0.8974, 0.7074]
+  - [0.8693, 0.7056]
+  - [0.8615, 0.7481]
+  - [0.8432, 0.7657]
+  - [0.8167, 0.7528]
+  - [0.8068, 0.7259]
+  - [0.8031, 0.6315]
+  - [0.8167, 0.6037]
+  - [0.8516, 0.5852]
+  - [0.8703, 0.6]
+  - [0.9, 0.6046]
+  - [0.9172, 0.6278]
+  - [0.9693, 0.6287]
+  - [0.9995, 0.6019]
+  - [0.9995, 0.5296]
+  - [0.9812, 0.512]
+  - [0.974, 0.4833]
+  - [0.9432, 0.4778]
+  - [0.926, 0.4546]
+  - [0.8839, 0.4519]
+  - [0.8635, 0.4269]
+  - [0.8214, 0.4241]
+  - [0.801, 0.3991]
+  - [0.7714, 0.3944]
+  - [0.7542, 0.3713]
+  - [0.712, 0.3685]
+  - [0.6917, 0.3435]
+  - [0.662, 0.3389]
+  - [0.6448, 0.3157]
+  - [0.6047, 0.3139]
+  - [0.5823, 0.288]
+  - [0.5401, 0.2852]
+  - [0.5198, 0.2602]
+  - [0.4901, 0.2556]
+  - [0.4729, 0.2324]
+  - [0.4328, 0.2306]
+  - [0.4104, 0.2046]
+  - [0.3682, 0.2019]
+  - [0.3479, 0.1769]
+  - [0.3141, 0.1685]
+  - [0.2854, 0.1213]
+  - [0.2297, 0.1194]
+  - [0.2073, 0.0935]
+  - [0.1807, 0.0907]
+  - [0.1568, 0.0648]
+  - [0.0615, 0.0648]
 exclusion_zones: []
-sidewalks: []
-
-# Lanes.  `direction` is an ORDERED path (>= 2 points) in the legal driving
-# direction; `group` names the carriageway direction (all lanes of one
-# direction share a group - used by congestion and wrong_way).
+sidewalks:
+- - [0.3964, 0.6926]
+  - [0.326, 0.6296]
+  - [0.2635, 0.725]
+  - [0.2599, 0.7352]
+  - [0.2641, 0.7389]
+  - [0.3917, 0.7009]
+- - [0.2229, 0.8704]
+  - [0.1724, 0.8037]
+  - [0.0635, 0.8833]
+  - [0.0599, 0.8917]
+  - [0.0667, 0.8954]
+  - [0.2214, 0.8769]
+- - [0.5021, 0.825]
+  - [0.5005, 0.8185]
+  - [0.4443, 0.7694]
+  - [0.3547, 0.8037]
+  - [0.3573, 0.812]
+  - [0.3891, 0.8537]
+  - [0.4969, 0.8296]
+- - [0.5818, 0.4685]
+  - [0.5885, 0.5093]
+  - [0.6391, 0.5306]
+  - [0.6932, 0.5065]
+  - [0.6906, 0.4991]
+  - [0.6255, 0.4565]
+  - [0.5875, 0.4639]
 lanes: []
-#  - id: nb_1
-#    group: northbound
-#    polygon: [[0.40, 1.00], [0.50, 1.00], [0.50, 0.55], [0.45, 0.55]]
-#    direction: [[0.45, 0.98], [0.47, 0.57]]
-
-# Stop lines.  `line` has exactly two points.  `approach` is optional: an
-# ordered pair of points giving the direction traffic travels when it crosses
-# the line; if omitted it is taken from the listed lanes' direction.
-# `signal` refers to an id in `signals`.
 stop_lines: []
-#  - id: sl_nb
-#    line: [[0.38, 0.62], [0.55, 0.62]]
-#    lanes: [nb_1]
-#    signal: main
-#    right_turn_on_red: false
-
-# Pedestrian crossings (zebra / signalised).
-crossings: []
-#  - id: cw_north
-#    polygon: [[0.35, 0.56], [0.60, 0.56], [0.60, 0.60], [0.35, 0.60]]
-
-# Intersection box (area between stop lines).  Optional; improves red_light
-# end times and stop_line vs red_light separation.
+crossings:
+- id: avenue_left
+  polygon:
+  - [0.5984, 0.4815]
+  - [0.5917, 0.475]
+  - [0.1792, 0.5704]
+  - [0.1719, 0.5778]
+  - [0.1719, 0.6194]
+  - [0.1786, 0.6259]
+  - [0.5911, 0.5324]
+  - [0.5984, 0.525]
+- id: right_road
+  polygon:
+  - [0.9661, 0.4259]
+  - [0.963, 0.4204]
+  - [0.6245, 0.463]
+  - [0.6156, 0.4704]
+  - [0.6156, 0.4991]
+  - [0.6188, 0.5046]
+  - [0.9568, 0.4657]
+  - [0.963, 0.4639]
+  - [0.9661, 0.4583]
+- id: lower_diagonal
+  polygon:
+  - [0.0849, 0.7306]
+  - [0.0854, 0.738]
+  - [0.0891, 0.7426]
+  - [0.2057, 0.8176]
+  - [0.2792, 0.9148]
+  - [0.3036, 0.9991]
+  - [0.4672, 0.9991]
+  - [0.4641, 0.9898]
+  - [0.3948, 0.8981]
+  - [0.3292, 0.8019]
+  - [0.1818, 0.6741]
+  - [0.0953, 0.7204]
 intersection: null
-#  [[0.30, 0.40], [0.70, 0.40], [0.70, 0.56], [0.30, 0.56]]
-
-# Traffic-signal heads.  `roi` = [x0, y0, x1, y1] tightly around ONE signal
-# head facing the camera.  `layout` = vertical (red top) or horizontal (red
-# left).  `lamps` lists the lamp colours in layout order.
 signals: []
-#  - id: main
-#    roi: [0.612, 0.081, 0.628, 0.150]
-#    layout: vertical
-#    lamps: [red, amber, green]
-
-# Solid lane markings that must not be crossed (polylines, >= 2 points).
 solid_lines: []
-#  - id: centre_line
-#    points: [[0.50, 1.00], [0.50, 0.55]]
-
-# Prohibited manoeuvres.  A track that is seen in `from` and later in `to`
-# performed the manoeuvre.  label: illegal_turn | illegal_u_turn.
-# (A turn from the wrong lane is expressed with `from` = that lane polygon.)
 prohibited_turns: []
-#  - id: no_left_from_nb
-#    label: illegal_turn
-#    from: [[0.40, 0.70], [0.50, 0.70], [0.50, 0.58], [0.40, 0.58]]
-#    to:   [[0.00, 0.40], [0.25, 0.40], [0.25, 0.52], [0.00, 0.52]]
-#    max_duration_sec: 12
-
-# U-turns.  If `u_turn_prohibited` is true, any detected U-turn on the
-# carriageway is illegal; otherwise only U-turns starting inside one of the
-# `u_turn_prohibited_zones` are reported.
 u_turn_prohibited: false
 u_turn_prohibited_zones: []
-
-# Optional polygons that restrict the static-object (debris) search.
 obstacle_regions: []

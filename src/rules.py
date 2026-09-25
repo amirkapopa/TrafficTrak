@@ -190,6 +190,8 @@ def rule_stopped_vehicle(ctx: SceneContext) -> list[RawEvent]:
             frac_queue = queue_samples / n_samples
             if _waiting_at_red(ctx, s, i0, i1, p, sc, c):
                 continue
+            if ctx.flow.stop_count(p[0], p[1], ctx.width, ctx.height, exclude=s.tid) >= float(c.get("stop_zone_min_vehicles", 2)):
+                continue  # other vehicles also stop here: signal queue, bus stop, drop-off point
             if frac_queue >= float(c.get("queue_frac", 0.5)):
                 continue
             emit = len(passers) >= int(c.get("passers_min", 2))
@@ -382,7 +384,7 @@ def rule_jaywalking(ctx: SceneContext) -> list[RawEvent]:
         else:
             on = np.array([ctx.on_road(p, s.tid) for p in pts], dtype=bool)
         if g.crossings:
-            on &= ~_crossing_mask(g, pts, 0.3 * s.scale)
+            on &= ~_crossing_mask(g, pts, float(c.get("crossing_buffer", 1.5)) * s.scale)
         if g.sidewalks or g.exclusion_zones:
             on &= ~g.in_any(g.sidewalks + g.exclusion_zones, pts)
         on &= ~rider
@@ -405,21 +407,22 @@ def rule_failure_to_yield(ctx: SceneContext) -> list[RawEvent]:
     for poly in g.crossings:
         # pedestrians on / entering the crossing, indexed by grid step
         ped_at: dict[int, list[tuple[float, float]]] = {}
-        centre = poly.pts.mean(axis=0)
         for s in persons:
             rider = rider_or_occupant_mask(ctx, s, 0.3)
             pts = s.ground()
             inside = poly.contains(pts)
-            buf = float(c.get("entering_buffer", 0.6)) * s.scale
             for i in range(s.n):
                 if rider[i]:
                     continue
-                ok = bool(inside[i])
-                if not ok and poly.signed_distance(pts[i]) >= -buf[i]:
-                    toward = (centre - pts[i]) @ np.array([s.vx[i], s.vy[i]])
-                    ok = toward > 0 and s.speed_n[i] >= 0.2
-                if ok:
-                    ped_at.setdefault(s.k0 + i, []).append((float(pts[i, 0]), float(pts[i, 1])))
+                walking = s.speed_n[i] >= float(c.get("min_ped_speed", 0.3))
+                if not walking or not inside[i]:
+                    continue
+                # well onto the zebra, not waiting at its kerb end / island
+                if poly.signed_distance(pts[i]) < float(c.get("min_depth_on_crossing", 0.4)) * s.scale[i]:
+                    continue
+                if g.sidewalks and g.in_any(g.sidewalks, pts[i][None])[0]:
+                    continue
+                ped_at.setdefault(s.k0 + i, []).append((float(pts[i, 0]), float(pts[i, 1])))
         if not ped_at:
             continue
         for v in vehicles:
@@ -434,8 +437,14 @@ def rule_failure_to_yield(ctx: SceneContext) -> list[RawEvent]:
                     continue
                 conflict = False
                 for i in range(i0, i1 + 1):
+                    sp = math.hypot(v.vx[i], v.vy[i])
+                    if sp <= 0:
+                        continue
+                    heading = np.array([v.vx[i], v.vy[i]]) / sp
                     for (px, py) in ped_at.get(v.k0 + i, []):
-                        if math.hypot(px - v.gx[i], py - v.gy[i]) <= float(c.get("max_ped_distance", 8.0)) * v.scale[i]:
+                        rel = np.array([px - v.gx[i], py - v.gy[i]])
+                        ahead = float(rel @ heading) > -0.25 * v.scale[i]   # in front of (or level with) the vehicle
+                        if ahead and math.hypot(*rel) <= float(c.get("max_ped_distance", 2.0)) * v.scale[i]:
                             conflict = True
                             break
                     if conflict:
@@ -741,8 +750,10 @@ def rule_accident_near_miss(ctx: SceneContext) -> list[RawEvent]:
     stationary = float(ctx.feat.get("stationary_speed", 0.12))
     moving = float(ctx.feat.get("moving_speed", 0.4))
     crawl = float(ctx.feat.get("crawl_speed", 1.0))
+    min_scale = float(ctx.cfg.get("features", {}).get("min_pair_scale_frac", 0.0)) * ctx.height
     users = [s for s in ctx.series if s.group in ("vehicle", "two_wheeler", "person")
-             and s.cls in set(ca.get("vehicle_classes", ["car", "bus", "truck", "motorcycle", "bicycle", "person"]))]
+             and s.cls in set(ca.get("vehicle_classes", ["car", "bus", "truck", "motorcycle", "bicycle", "person"]))
+             and (s.group == "person" or float(np.median(s.scale)) >= min_scale)]  # far-away vehicles: too noisy
     pairs = candidate_pairs(users, ("vehicle", "two_wheeler"), ("vehicle", "two_wheeler", "person"), max_dist=3.0)
     accidents: list[RawEvent] = []
     near: list[RawEvent] = []
@@ -773,11 +784,15 @@ def rule_accident_near_miss(ctx: SceneContext) -> list[RawEvent]:
                 if not (decel and second):
                     continue
                 post_n = ctx.n(float(ca.get("post_slow_sec", 2.0)))
-                look = ctx.n(5.0)
+                look = ctx.n(float(ca.get("stop_within_sec", 2.0)))
                 slow_at = [sustained_onset(v.speed_n < crawl, i, post_n) for v, i in ((a, ia), (b, ib))]
                 post = all(0 <= k and k - i <= look for k, i in zip(slow_at, (ia, ib)))
                 if not post:
-                    continue
+                    continue  # vehicles that keep driving after "contact" only overlapped in the image
+                close_n = ctx.n(float(ca.get("stay_close_sec", 1.5)))
+                after = pf.raw_gap[j0:j0 + close_n + 1]
+                if len(after) < close_n or float(np.max(after)) > float(ca.get("stay_close_gap", 0.6)):
+                    continue  # colliding vehicles end up next to each other
                 hold = ctx.n(float(ca.get("stop_hold_sec", 1.0)))
                 ends = [v.time(_stop_time(v, i, stationary, hold)) for v, i in ((a, ia), (b, ib))]
                 t0 = pf.time(j0) - ctx.dt / 2
@@ -814,6 +829,19 @@ def _parked_party(ctx: SceneContext, pf: PairFeatures, jc: int, moving: float, w
     return False
 
 
+def _miss_distance(pf: PairFeatures, j: int, horizon: float) -> float:
+    """Predicted closest approach (scale units) of the two ground points,
+    extrapolating their velocities at pair index ``j`` up to ``horizon`` s."""
+    a, b = pf.a, pf.b
+    ia, ib = int(pf.ia[j]), int(pf.ib[j])
+    s = 0.5 * (a.scale[ia] + b.scale[ib])
+    p = np.array([b.gx[ib] - a.gx[ia], b.gy[ib] - a.gy[ia]]) / s
+    v = np.array([b.vx[ib] - a.vx[ia], b.vy[ib] - a.vy[ia]]) / s
+    vv = float(v @ v)
+    t = 0.0 if vv < 1e-9 else min(max(-float(p @ v) / vv, 0.0), horizon)
+    return float(np.linalg.norm(p + v * t))
+
+
 def _near_miss_pair(ctx: SceneContext, pf: PairFeatures, c: dict, acc: list[tuple[float, float]], moving: float) -> list[RawEvent]:
     conflict = (pf.ttc < float(c.get("ttc_threshold", 1.0))) & (pf.closing >= float(c.get("min_closing_speed", 1.5)))
     if not conflict.any():
@@ -842,12 +870,15 @@ def _near_miss_pair(ctx: SceneContext, pf: PairFeatures, c: dict, acc: list[tupl
             fast[lo:hi + 1] = v.speed_n[lo:hi + 1] >= min_v * 0.5
             brake = fast & (v.accel_n <= -float(c.get("decel_threshold", 2.0)))
             swerve = fast & (np.abs(v.heading_rate) >= math.radians(float(c.get("swerve_rate_deg", 35))))
-            for m in (brake, swerve):
+            cues = (brake, swerve) if c.get("use_swerve", False) else (brake,)
+            for m in cues:
                 k = sustained_onset(m, lo, sustain)
                 if 0 <= k <= hi and float(v.speed_n[max(k - ctx.n(0.5), 0):k + 1].max()) >= min_v:
                     onsets.append(v.time(k))
         if not onsets:
             continue
+        if _miss_distance(pf, max(jc - ctx.n(0.5), 0), float(c.get("horizon_sec", 3.0))) > float(c.get("collision_radius", 0.8)):
+            continue  # closing but not on a collision course (e.g. passing in neighbouring lanes)
         t_on = min(onsets)
         # clearance: not closing and separated
         clear = (pf.closing <= float(c.get("clear_closing_speed", 0.2))) & (pf.gap >= float(c.get("clear_gap", 0.5)))

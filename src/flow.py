@@ -33,6 +33,10 @@ class FlowField:
         self.hist = np.zeros((self.gh, self.gw, self.bins), dtype=np.float64)
         self.support = np.zeros((self.gh, self.gw), dtype=np.float64)
         self.occ = np.zeros((self.oh, self.ow), dtype=np.float64)
+        # distinct vehicles that stood still (>= min_stop_sec) in each fine cell:
+        # signal queues, bus stops, parking - places where stopping is normal
+        self.stop_occ = np.zeros((self.oh, self.ow), dtype=np.float64)
+        self._stop_contrib: dict[int, np.ndarray] = {}
         self._contrib: dict[int, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
         self._occ_dil: np.ndarray | None = None
         self.rel_frac = 0.25  # carriageway = at least this share of the busiest (p90) cells
@@ -77,6 +81,34 @@ class FlowField:
         self._contrib[s.tid] = (cells, votes, ocells)
         self._occ_dil = None
 
+    def add_stops(self, s: TrackSeries, width: int, height: int, stationary_speed: float, min_stop_sec: float) -> None:
+        """Record where this vehicle stood still for at least ``min_stop_sec``."""
+        if s.group not in FLOW_GROUPS or s.n < 2:
+            return
+        still = s.speed_n < stationary_speed
+        if still.sum() * s.dt < min_stop_sec:
+            return
+        oy, ox = self._cells(s.gx[still] / width, s.gy[still] / height, self.ow, self.oh)
+        flat, counts = np.unique(oy * self.ow + ox, return_counts=True)
+        cells = flat[counts * s.dt >= min_stop_sec]
+        if cells.size == 0:
+            return
+        self.stop_occ[cells // self.ow, cells % self.ow] += 1.0
+        self._stop_contrib[s.tid] = cells
+
+    def stop_count(self, x: float, y: float, width: int, height: int, exclude: int | None = None) -> float:
+        """How many *other* vehicles stood still within one fine cell of (x, y)."""
+        oy, ox = self._cells(np.array([x / width]), np.array([y / height]), self.ow, self.oh)
+        oy, ox = int(oy[0]), int(ox[0])
+        y0, y1, x0, x1 = max(oy - 1, 0), min(oy + 2, self.oh), max(ox - 1, 0), min(ox + 2, self.ow)
+        count = float(self.stop_occ[y0:y1, x0:x1].max())
+        if exclude is not None and exclude in self._stop_contrib:
+            own = self._stop_contrib[exclude]
+            ys, xs = own // self.ow, own % self.ow
+            if np.any((ys >= y0) & (ys < y1) & (xs >= x0) & (xs < x1)):
+                count -= 1.0
+        return max(count, 0.0)
+
     def add_prior(self, other: FlowField, weight: float = 1.0) -> None:
         if (other.gw, other.gh, other.bins) != (self.gw, self.gh, self.bins) or (other.ow, other.oh) != (self.ow, self.oh):
             log.warning("scene prior grid mismatch - ignored")
@@ -84,6 +116,7 @@ class FlowField:
         self.hist += weight * other.hist
         self.support += weight * other.support
         self.occ += weight * other.occ
+        self.stop_occ += weight * other.stop_occ
         self._occ_dil = None
 
     # ------------------------------------------------------------------ query
@@ -169,7 +202,7 @@ class FlowField:
 
     # ------------------------------------------------------------------ io
     def save(self, path: str | Path) -> None:
-        np.savez_compressed(path, hist=self.hist, support=self.support, occ=self.occ,
+        np.savez_compressed(path, hist=self.hist, support=self.support, occ=self.occ, stop_occ=self.stop_occ,
                             grid=np.array([self.gw, self.gh]), occ_grid=np.array([self.ow, self.oh]),
                             bins=np.array([self.bins]))
 
@@ -179,6 +212,8 @@ class FlowField:
             d = np.load(path)
             f = cls(tuple(d["grid"].tolist()), tuple(d["occ_grid"].tolist()), int(d["bins"][0]))
             f.hist, f.support, f.occ = d["hist"].astype(np.float64), d["support"].astype(np.float64), d["occ"].astype(np.float64)
+            if "stop_occ" in d.files:
+                f.stop_occ = d["stop_occ"].astype(np.float64)
             return f
         except Exception as exc:  # noqa: BLE001
             log.warning("cannot load scene prior %s: %s", path, exc)
