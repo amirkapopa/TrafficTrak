@@ -180,7 +180,7 @@ frames, so `end ≤ video_duration` always holds.
 | `near_miss` | TTC < 1 s with closing ≥ 1.5 units/s + hard braking or swerve onset; no contact; end when separated and not closing | nothing | **yes** |
 | `road_obstacle` | (a) animal tracks on the carriageway; (b) persistent, static, unexplained foreground vs. empty-road background | (a) carriageway (learned OK); (b) calibrated carriageway or `obstacle_regions` | animals only |
 | `jaywalking` | pedestrian ground point inside carriageway (with margin), outside crossings (+1.5 body-scale slack) and sidewalks, not a rider, occupant or standing rider with an undetected scooter, ≥ 1 s | calibrated carriageway | **calibrated for the challenge camera** |
-| `failure_to_yield` | moving vehicle inside a crossing while a pedestrian is on or entering it nearby | crossings | no |
+| `failure_to_yield` | vehicle driving (≥ 1 scale unit/s) through a crossing while a walking pedestrian is well onto the zebra, within 1.5 vehicle lengths in front of it | crossings | **calibrated for the challenge camera** |
 | `red_light` | front point crosses the stop line along the approach while the signal has been red for ≥ 0.4 s, then enters the intersection; end on exit | stop line + signal ROI (+ intersection) | no |
 | `stop_line` | vehicle crosses the stop line and stops before the intersection while red; end at green | stop line + signal ROI | no |
 | `solid_line_crossing` | inset bottom corners (wheel proxies) change side of a solid polyline; end when all points are across | solid lines | no |
