@@ -7,10 +7,11 @@
 seed: 0
 
 runtime:
-  # Emergency governor: if the projected processing time exceeds
-  # budget_factor x video duration, the Part A frame stride is increased.
-  # On the target T4 it should never trigger (keeps output deterministic).
-  budget_factor: 2.4
+  # Emergency governor.  The harness allows Part A + Part B together 3x the
+  # video duration.  If Part A runs slower than budget_factor x real time its
+  # frame stride is increased (Part B has its own limit: risk.budget_factor).
+  # On the target T4 neither triggers, so output stays deterministic.
+  budget_factor: 1.4
   prefetch_frames: 48
 
 video:
@@ -219,6 +220,8 @@ segments:
 risk:
   detect_every_gpu: 1
   detect_every_cpu: 3
+  budget_factor: 1.3       # emergency: detect on fewer frames if slower than 1.3x real time
+  max_detect_every: 8
   horizon_sec: 4.0
   ttc_scale_sec: 3.0
   conflict_radius: 0.8

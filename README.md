@@ -26,6 +26,22 @@ detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 
 ---
 
+## How the organisers run this submission
+
+```bash
+pip install -r requirements.txt          # or: docker build -t traffictrak .
+bash weights/download.sh                 # once, before going offline (137 MB, checksummed)
+python run_submission.py --videos /data/test --out predictions.json
+python evaluate.py --pred predictions.json --gt ground_truth.json
+```
+
+**Submission checklist:**
+* `solution.py` exposes `CLASSES`, `detect_events` and `RiskEstimator` exactly as in the template.
+* `run_submission.py` and `evaluate.py` are unmodified.
+* The official harness produced VALID output on real clips, within budget even on CPU.
+* **Time budget (3× duration for A + B).** Two emergency limiters, one per part (1.4× and 1.3× real time), cut work before the budget runs out. If CUDA is advertised but unusable, the pipeline switches to the small model automatically. Neither triggers on the target GPU.
+* No network access at run time. Weights come from `weights/`. Crashes, missing weights and corrupt videos degrade to `[]` and never lose the video.
+
 ## Contents
 1. [Quick start](#quick-start)
 2. [Repository layout](#repository-layout)
@@ -51,7 +67,7 @@ detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 # Python 3.10+ ; GPU box with CUDA 12 + cuDNN 9 (onnxruntime-gpu)
 pip install -r requirements.txt -r requirements-dev.txt     # CPU only: requirements-cpu.txt
 bash weights/download.sh                                      # 137 MB, SHA-256 verified; do this BEFORE going offline
-make check                                                    # ruff + 63 unit tests
+make check                                                    # ruff + 66 unit tests
 
 # with the sample videos + camera.md in samples/
 make prior          # learn the scene prior (traffic directions, road area) from the samples
@@ -88,7 +104,7 @@ Docker (offline evaluation image, weights baked in at build time):
 
 ```bash
 docker build -t traffictrak .
-docker run --gpus all --network none -v $PWD/samples:/data traffictrak   # -> /data/predictions.json
+docker run --gpus all --network none -v $PWD/samples:/data/test -v $PWD/out:/out traffictrak   # -> out/predictions.json
 ```
 
 ## Repository layout
@@ -322,7 +338,7 @@ a background thread. If a machine turns out slower than budget, set
 make check     # ruff (pyflakes, pycodestyle, bugbear, isort, pyupgrade) + pytest
 ```
 
-The 63 tests cover:
+The 66 tests cover:
 * geometry: normalised conversion, containment, crossings, config validation
   and safe defaults;
 * at least one synthetic trajectory scenario per event class, including
@@ -330,6 +346,7 @@ The 63 tests cover:
   used legally and unreliable signals, with boundary-time assertions;
 * segment merging, clamping and rounding safety;
 * the output schema, including corrupt, missing or weightless inputs;
+* runtime safety: CPU fallback to the small model and the Part B governor;
 * Part B range, reset, determinism and **causality** (identical outputs when
   only future frames differ);
 * signal classification, tracker identity and low-score rescue, YOLOX
