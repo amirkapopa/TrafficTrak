@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TrafficTrak</title>
+<meta name="description" content="TrafficTrak: offline traffic-event detection and causal accident-risk estimation for a fixed CCTV camera. WIUT Hackathon 2026, Computer Vision track.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='10' y='2' width='12' height='28' rx='4' fill='%23222'/%3E%3Ccircle cx='16' cy='9' r='3.4' fill='%23e34948'/%3E%3Ccircle cx='16' cy='16' r='3.4' fill='%23eda100'/%3E%3Ccircle cx='16' cy='23' r='3.4' fill='%231baf7a'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #fcfcfb; --surface: #ffffff; --surface-2: #f3f2ef; --line: #e4e3df;
+  --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #7a7974;
+  --accent: #2a78d6; --accent-ink: #ffffff;
+  --red: #c73b3a; --amber: #b87800; --green: #12845b;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141413; --surface: #1c1c1b; --surface-2: #232322; --line: #34332f;
+    --ink: #f5f4ef; --ink-2: #c3c2b7; --ink-3: #97968d;
+    --accent: #3987e5; --accent-ink: #ffffff;
+    --red: #e66767; --amber: #e0a526; --green: #3cc28f;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141413; --surface: #1c1c1b; --surface-2: #232322; --line: #34332f;
+  --ink: #f5f4ef; --ink-2: #c3c2b7; --ink-3: #97968d;
+  --accent: #3987e5; --accent-ink: #ffffff;
+  --red: #e66767; --amber: #e0a526; --green: #3cc28f;
+  --shadow: none; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif; }
+a { color: var(--accent); text-underline-offset: 3px; }
+img { max-width: 100%; height: auto; display: block; }
+code { font: 0.9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface-2);
+  padding: 1px 6px; border-radius: 5px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+nav { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+nav .wrap { display: flex; align-items: center; gap: 20px; height: 56px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink); text-decoration: none; }
+.lights { display: inline-flex; flex-direction: column; gap: 2px; background: #222; padding: 3px 4px; border-radius: 5px; }
+.lights i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.navlinks { display: flex; gap: 18px; margin-left: auto; overflow-x: auto; scrollbar-width: none; }
+.navlinks a { color: var(--ink-2); text-decoration: none; font-size: 14px; white-space: nowrap; }
+.navlinks a:hover { color: var(--ink); }
+#theme { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); border-radius: 8px;
+  padding: 4px 9px; cursor: pointer; font-size: 14px; }
+header.hero { padding: 72px 0 40px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 14px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 12px; }
+h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.08; margin: 0 0 18px; letter-spacing: -0.02em; }
+h2 { font-size: clamp(26px, 3.6vw, 34px); line-height: 1.2; margin: 0 0 12px; letter-spacing: -0.01em; }
+h3 { font-size: 18px; margin: 0 0 6px; }
+.lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--ink-2); max-width: 760px; margin: 0 0 28px; }
+.btns { display: flex; flex-wrap: wrap; gap: 12px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px; font-weight: 600;
+  text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 44px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; box-shadow: var(--shadow); }
+.stat b { display: block; font-size: 28px; line-height: 1.1; letter-spacing: -0.01em; }
+.stat span { color: var(--ink-2); font-size: 14px; }
+section { padding: 56px 0; border-top: 1px solid var(--line); }
+.sub { color: var(--ink-2); max-width: 760px; margin: 0 0 28px; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; box-shadow: var(--shadow); }
+.card p { margin: 0; color: var(--ink-2); }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); }
+figure img { width: 100%; }
+figcaption { padding: 12px 16px; color: var(--ink-2); font-size: 14px; border-top: 1px solid var(--line); }
+/* pipeline */
+.pipe { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; counter-reset: step; }
+.step { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: var(--shadow); }
+.step::before { counter-increment: step; content: counter(step); display: inline-grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.step h3 { font-size: 15px; }
+.step p { margin: 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.45; }
+/* classes table */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 13px; color: var(--ink-2); font-weight: 600; background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td:first-child { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+  border: 1px solid var(--line); white-space: nowrap; color: var(--ink); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.on { color: var(--green); } .pill.cal { color: var(--amber); } .pill.opt { color: var(--ink-3); }
+.pill span { color: var(--ink); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 0; color: var(--ink-2); font-size: 13.5px; }
+/* formula */
+.formula { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2); border-radius: 10px; padding: 14px 16px; overflow-x: auto; white-space: nowrap; }
+/* bar chart: runtime vs budget */
+.bars { display: grid; gap: 14px; }
+.barrow { display: grid; grid-template-columns: 170px minmax(0, 1fr) 90px; gap: 12px; align-items: center; font-size: 14px; }
+.track { position: relative; height: 16px; background: var(--surface-2); border-radius: 4px; }
+.used { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 4px; }
+.budgetline { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink-2); }
+.barrow .num { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+ul.clean { margin: 0; padding-left: 20px; color: var(--ink-2); }
+ul.clean li { margin: 6px 0; }
+/* team */
+.team { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.member { display: flex; flex-direction: column; gap: 12px; }
+.avatar { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 19px;
+  color: #fff; }
+.member h3 { font-size: 19px; margin: 0; }
+.role { color: var(--accent); font-weight: 600; font-size: 14px; margin: 0; }
+.member p.bio { color: var(--ink-2); font-size: 14.5px; margin: 0; flex: 1; }
+.member a.li { font-weight: 600; font-size: 14px; text-decoration: none; }
+footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--ink-3); font-size: 14px; }
+footer a { color: var(--ink-2); }
+@media (max-width: 900px) {
+  .pipe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .team, .grid3 { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 680px) {
+  .grid2 { grid-template-columns: 1fr; }
+  .navlinks { display: none; }
+  #theme { margin-left: auto; }
+  header.hero { padding-top: 44px; }
+  .barrow { grid-template-columns: 1fr; gap: 6px; }
+  .barrow .num { text-align: left; }
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="TrafficTrak home">
+      <span class="lights" aria-hidden="true"><i style="background:#e34948"></i><i style="background:#eda100"></i><i style="background:#1baf7a"></i></span>
+      TrafficTrak
+    </a>
+    <div class="navlinks">
+      <a href="#how">How it works</a>
+      <a href="#events">Events</a>
+      <a href="#risk">Accident risk</a>
+      <a href="#results">Results</a>
+      <a href="#engineering">Engineering</a>
+      <a href="#team">Team</a>
+    </div>
+    <button id="theme" type="button" aria-label="Toggle light / dark theme">◐</button>
+  </div>
+</nav>
+
+<main id="top">
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">WIUT Hackathon 2026 · Computer Vision track</p>
+    <h1>Reading a road camera the way a traffic officer would.</h1>
+    <p class="lead">TrafficTrak watches video from one fixed CCTV camera and reports every traffic event (crashes,
+      near misses, red-light runners, wrong-way drivers, jaywalkers and more) as precise time segments. It also
+      estimates, frame by frame, the chance that an accident is about to happen. It runs fully offline on one GPU,
+      using only open models.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/amirkapopa/TrafficTrak">View the code on GitHub</a>
+      <a class="btn" href="#how">How it works</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>14</b><span>event types, each with an explicit rule</span></div>
+      <div class="stat"><b>≤ 1.8×</b><span>video length to process, CPU only (limit 3×)</span></div>
+      <div class="stat"><b>137 MB</b><span>of open model weights (limit 5 GB)</span></div>
+      <div class="stat"><b>66</b><span>automated tests</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">One learned component does the seeing. Everything that decides what counts as an event is written
+      as an explicit, auditable rule, so every alert can be explained.</p>
+    <div class="pipe">
+      <div class="step"><h3>Decode</h3><p>Every 2nd frame on a GPU, read in a background thread. Timestamps are frame index ÷ fps.</p></div>
+      <div class="step"><h3>Detect</h3><p>YOLOX-M (open, Apache-2.0) finds cars, buses, trucks, bikes, people and animals.</p></div>
+      <div class="step"><h3>Track</h3><p>A ByteTrack-style tracker keeps each road user's identity through occlusions.</p></div>
+      <div class="step"><h3>Understand the scene</h3><p>Lanes, stop lines and crossings from a calibration file, plus the normal traffic flow learned from the video itself.</p></div>
+      <div class="step"><h3>Apply rules</h3><p>One state machine per event type turns trajectories into start and end times.</p></div>
+      <div class="step"><h3>Clean up</h3><p>Merge fragments, drop blips, never overlap two events of the same type.</p></div>
+    </div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="card"><h3>Speeds measured in car lengths, not pixels</h3>
+        <p>A car far away moves only a few pixels per second; a close one moves hundreds. We measure every speed in
+          units of the object's own size, so one threshold means the same thing near and far from the camera, with
+          no camera calibration needed.</p></div>
+      <div class="card"><h3>The camera never moves, so the scene can be learned</h3>
+        <p>Where traffic normally drives, and in which direction, is learned from the vehicles themselves. A driver
+          going against that learned flow is flagged as wrong-way. Parked cars at the kerb, where traffic never
+          drives, are not mistaken for stopped vehicles.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="events">
+  <div class="wrap">
+    <h2>Fourteen event types, one rule each</h2>
+    <p class="sub">The official metric punishes guessing: one false alert of a type that never occurs costs as much as
+      missing a whole class. So each rule only fires when its evidence is present, and rules that need road
+      markings stay silent until those markings are calibrated.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Event</th><th>How it is detected</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>accident</td><td>Visible contact between road users, plus sudden braking and a jolt, then both stop</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>near_miss</td><td>Time-to-collision under 1 s with hard braking or swerving, and no contact</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>wrong_way</td><td>Sustained heading opposite to the lane or learned traffic direction</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>stopped_vehicle</td><td>Still for ≥ 10 s on the road while other traffic passes it (not a signal queue)</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>congestion</td><td>A whole direction of traffic crawling or standing for ≥ 30 s</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>road_obstacle</td><td>Animals on the carriageway; debris via background comparison once the road is calibrated</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>red_light</td><td>Vehicle front crosses the stop line while the traffic light has been red</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>stop_line</td><td>Vehicle stops past the stop line on red, until the light turns green</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>jaywalking</td><td>Pedestrian on the carriageway outside a crossing</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>failure_to_yield</td><td>Vehicle drives through a crossing while a pedestrian is on it</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>solid_line_crossing</td><td>Wheel positions change sides of a solid marking</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>illegal_turn</td><td>Trajectory from a prohibited "from" zone into its "to" zone</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>illegal_u_turn</td><td>Heading reverses ≥ 150° where U-turns are prohibited</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>fire_smoke</td><td>Optional image classifier; off unless its weights are supplied</td><td><span class="pill opt"><span>Optional</span></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="pill on"><span>Active</span></span> works on any video</span>
+      <span><span class="pill cal"><span>Needs calibration</span></span> switches on once the lanes, stop line or crossing are drawn in the calibration tool</span>
+    </div>
+  </div>
+</section>
+
+<section id="risk">
+  <div class="wrap">
+    <h2>Seeing an accident before it happens</h2>
+    <p class="sub">For every frame, TrafficTrak estimates the probability that an accident starts within the next five
+      seconds. It uses only the frames it has already seen, the way a live system would.</p>
+    <div class="grid3">
+      <div class="card"><h3>Conflict</h3><p>Two road users on a collision course: predicted closest approach, time to collision and closing speed.</p></div>
+      <div class="card"><h3>Evasive action</h3><p>Hard braking or a sudden swerve by either of them.</p></div>
+      <div class="card"><h3>Violation</h3><p>Wrong-way driving, a pedestrian on the road, or a car approaching a red light at speed.</p></div>
+    </div>
+    <p class="formula" style="margin-top:20px">risk = sigmoid( −4 + 3·conflict + 2·evasive + 1.5·violation + 1.5·conflict·evasive )</p>
+    <p class="sub" style="margin-top:14px">The weights are chosen so that no single signal can raise an alarm on its
+      own; only agreeing signals cross 0.5. An alarm must also hold for half a second, so one noisy frame cannot
+      trigger it. Pairs of objects of very different sizes are ignored, because they are at different distances
+      from the camera and only look close in the picture.</p>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>Tested on real footage</h2>
+    <p class="sub">We ran the complete system through the organisers' own harness and scorer on real, openly
+      licensed CCTV clips. Every false alert these tests uncovered was traced to its cause and fixed.</p>
+    <div class="grid2">
+      <figure>
+        <img src="assets/street_tracking.jpg" alt="Street camera frame with every car outlined and numbered by the tracker" loading="lazy" width="640" height="352">
+        <figcaption><b>Normal traffic.</b> All 20 cars tracked, no events reported, which is correct. Cars parked at
+          the kerb are not mistaken for stopped vehicles.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/wrong_way_detection.jpg" alt="Frame with a red wrong-way banner and red boxes on cars driving against traffic" loading="lazy" width="640" height="352">
+        <figcaption><b>Wrong-way test.</b> From 25 s the clip plays in reverse, so cars drive against traffic. Detected
+          at 25.17 s, against a true start of 24.99 s.</figcaption>
+      </figure>
+    </div>
+    <figure style="margin-top:20px">
+      <img src="assets/timeline_wrong_way.jpg" alt="Timeline chart: one wrong_way bar from 25 to 37 seconds; below it the risk curve stays under the 0.5 alarm line" loading="lazy" width="1430" height="676">
+      <figcaption>Event timeline and accident-risk curve for the wrong-way test. The official scorer matched the event
+        exactly (F1 = 1.0 at every tIoU threshold). The risk score crosses 0.5 once, at 33.7 s, when a wrong-way car
+        closes in on oncoming traffic while braking, the moment when three warning signs agree.</figcaption>
+    </figure>
+
+    <div class="grid2" style="margin-top:28px">
+      <div class="card">
+        <h3>Processing time against the budget</h3>
+        <p style="margin-bottom:16px">Official harness, CPU only (no GPU). The grey line marks the organisers' limit
+          of 3× the video length.</p>
+        <div class="bars" role="img" aria-label="Processing time versus 3x budget: plaza 63 of 238 seconds, street 68 of 113, reversed street 69 of 111">
+          <div class="barrow"><span>Plaza, 79.5 s</span><div class="track"><div class="used" style="width:26.5%"></div><div class="budgetline" style="left:100%"></div></div><span class="num">63 / 238 s</span></div>
+          <div class="barrow"><span>Street, 37.7 s</span><div class="track"><div class="used" style="width:60.2%"></div><div class="budgetline" style="left:100%"></div></div><span class="num">68 / 113 s</span></div>
+          <div class="barrow"><span>Reversed street, 37.0 s</span><div class="track"><div class="used" style="width:62.2%"></div><div class="budgetline" style="left:100%"></div></div><span class="num">69 / 111 s</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>What testing caught and fixed</h3>
+        <ul class="clean">
+          <li>A car stopping next to a parked car looked like a near miss; parked, off-road cars are now excluded.</li>
+          <li>The learned "road area" leaked onto the kerb once more footage was added; the threshold is now relative.</li>
+          <li>A near car and a far car seemed to converge in the image; objects at different depths are now ignored.</li>
+          <li>If the judges' GPU drivers fail, the system switches to a smaller model instead of running out of time.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="engineering">
+  <div class="wrap">
+    <h2>Built to be trusted</h2>
+    <div class="grid3">
+      <div class="card"><h3>Deterministic</h3><p>Fixed seeds, deterministic GPU kernels and stable ordering: the same video
+        always gives the same answer.</p></div>
+      <div class="card"><h3>Never crashes the harness</h3><p>Corrupt files, missing weights and unreadable frames return an
+        empty result with a logged warning, never an exception.</p></div>
+      <div class="card"><h3>Stays inside the time budget</h3><p>Two emergency limiters, one each for detection and risk,
+        cut work before the 3× limit. They never trigger on the target GPU.</p></div>
+      <div class="card"><h3>Open and offline</h3><p>YOLOX (Apache-2.0) weights are downloaded once and checksummed. No paid
+        API or online service is used at any point.</p></div>
+      <div class="card"><h3>Tested</h3><p>66 tests cover at least one scenario for every event type, output validity,
+        runtime safety and the causality of the risk score.</p></div>
+      <div class="card"><h3>Tools for people</h3><p>A click-to-draw calibration page, a review tool that turns checked
+        detections into labels, and an upload demo.</p></div>
+    </div>
+    <div class="grid2" style="margin-top:24px">
+      <figure>
+        <img src="assets/demo.jpg" alt="Upload demo page showing metrics, annotated playback and the timeline panel" loading="lazy" width="1400" height="1000">
+        <figcaption><b>Upload demo.</b> Drop in a video to get events, annotated playback, a clickable timeline and the
+          risk curve. Here: the wrong-way test clip, analysed in 0.99× its length on a laptop-class CPU.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/calibration_tool.jpg" alt="Calibration page with a road polygon and a traffic-light box drawn on a camera frame" loading="lazy" width="1400" height="900">
+        <figcaption><b>Calibration tool.</b> Click the road, lanes, stop line and traffic light on a frame; it exports the
+          scene file.</figcaption>
+      </figure>
+    </div>
+    <div class="card" style="margin-top:24px">
+      <h3>Honest limitations</h3>
+      <ul class="clean">
+        <li>Seven event types need the camera's road layout calibrated before they can fire.</li>
+        <li>The detector is trained on everyday photos; it struggles with cameras that look straight down at the road.</li>
+        <li>Without a ground-plane calibration, speeds are estimated in the image, so they are noisier far from the camera.</li>
+        <li>Thresholds are principled defaults; tuning them needs labelled footage from this camera.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="team">
+  <div class="wrap">
+    <h2>The team</h2>
+    <p class="sub">Computer science students from Tashkent who like building things that make everyday life safer.</p>
+    <div class="team">
+      <div class="card member">
+        <div class="avatar" style="background:#2a78d6" aria-hidden="true">AP</div>
+        <div><h3>Amir Pulatov</h3><p class="role">Project lead · UI/UX</p></div>
+        <p class="bio">Amir is a Computer Science and Engineering student and UI/UX designer who likes turning ideas into
+          intuitive, user-friendly products. On TrafficTrak he led the project: he steered the direction, managed the
+          repository and integrated the organisers' starter kit, and ran and tested the system himself on real
+          traffic video on macOS.</p>
+        <a class="li" href="https://www.linkedin.com/in/amir-pulatov-0ba608401" rel="noopener">LinkedIn →</a>
+      </div>
+      <div class="card member">
+        <div class="avatar" style="background:#12845b" aria-hidden="true">RK</div>
+        <div><h3>Roman Kim</h3><p class="role">Computer Science, INHA University in Tashkent</p></div>
+        <p class="bio">Roman is a first-year Computer Science student with a strong commitment to international youth
+          initiatives and community leadership. He has represented countries as a Model UN delegate, volunteered with
+          UN Volunteers, and provided technical support for the International Chemistry and Informatics Olympiads.
+          He recently led a cross-border student initiative that brought about 150 students from four countries
+          together for six interactive discussions.</p>
+        <a class="li" href="https://www.linkedin.com/in/roman-kim-3054613a9" rel="noopener">LinkedIn →</a>
+      </div>
+      <div class="card member">
+        <div class="avatar" style="background:#8a4fbf" aria-hidden="true">MK</div>
+        <div><h3>Madina Karimova</h3><p class="role">Computer &amp; Information Engineering, INHA University in Tashkent</p></div>
+        <p class="bio">Madina is interested in technology, research and human-centred innovation. She has worked on
+          educational technology projects, software development and interdisciplinary research, including a study
+          of algorithmic decision-making and its influence on human behaviour. Her interests include accessible
+          science education, human–computer interaction, behavioural research, journalism and narrative writing.</p>
+        <a class="li" href="https://www.linkedin.com/in/madinahon-karimova-409a952a0" rel="noopener">LinkedIn →</a>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>TrafficTrak · WIUT Hackathon 2026, Computer Vision track ·
+      <a href="https://github.com/amirkapopa/TrafficTrak">Source code</a> (Apache-2.0).</p>
+    <p>Detector: <a href="https://github.com/Megvii-BaseDetection/YOLOX">YOLOX</a> (Apache-2.0). Tracking follows the
+      ByteTrack association scheme (independent implementation). Test footage: street clip from
+      <a href="https://github.com/ahmetozlu/vehicle_counting_tensorflow">ahmetozlu/vehicle_counting_tensorflow</a> (MIT);
+      calibration example frame from OpenCV's <code>vtest.avi</code> sample (BSD).</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var btn = document.getElementById('theme');
+  var root = document.documentElement;
+  try { var saved = localStorage.getItem('tt-theme'); if (saved) root.setAttribute('data-theme', saved); } catch (e) {}
+  btn.addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') ? root.getAttribute('data-theme') === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('tt-theme', next); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>

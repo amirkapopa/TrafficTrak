@@ -57,7 +57,8 @@ python evaluate.py --pred predictions.json --gt ground_truth.json
 12. [Testing and quality](#testing-and-quality)
 13. [Local labels and evaluation](#local-labels-and-evaluation)
 14. [Upload demo](#upload-demo)
-15. [Team contributions](#team-contributions)
+15. [Team](#team)
+16. [Project website](#project-website)
 
 ---
 
@@ -132,6 +133,7 @@ docker run --gpus all --network none -v $PWD/samples:/data/test -v $PWD/out:/out
 | `demo/app.py` | Streamlit upload demo |
 | `tests/` | geometry, rules (one synthetic scenario per class), segments, schema, causal risk, components, demo |
 | `docs/technical_report.md` | one-page public technical report |
+| `docs/index.html` | project website (GitHub Pages) |
 
 ## Architecture
 
@@ -403,17 +405,19 @@ make predict dev-eval               # official Part A F1 @ tIoU 0.3/0.5/0.7 and 
 The demo runs on CPU and imports the same code as `solution.py`, but the
 evaluated entry points do not depend on it.
 
-## Team contributions
+## Team
 
-| area | components |
-|---|---|
-| perception | `detection.py`, `tracking.py`, weights pipeline |
-| scene modelling | `geometry.py`, `flow.py`, `signal_state.py`, calibration tool, EDA |
-| event logic | `features.py`, `rules.py`, `segments.py`, `monitors.py` |
-| risk | `risk.py`, risk tests |
-| tooling & delivery | scripts, tests, demo, Docker, docs |
+| member | role | links |
+|---|---|---|
+| **Amir Pulatov** | Project lead · UI/UX: direction, repository and starter-kit integration, testing on real footage (macOS) | [LinkedIn](https://www.linkedin.com/in/amir-pulatov-0ba608401) |
+| **Roman Kim** | Computer Science, INHA University in Tashkent | [LinkedIn](https://www.linkedin.com/in/roman-kim-3054613a9) |
+| **Madina Karimova** | Computer & Information Engineering, INHA University in Tashkent | [LinkedIn](https://www.linkedin.com/in/madinahon-karimova-409a952a0) |
 
-This first implementation was produced with Claude Code (an AI coding
-assistant) at the team's request. The team members' names and their
-individual roles are not recorded in this repository; the team should add
-them here before publication.
+Much of the implementation was written with Claude Code, an AI coding assistant, under the team's direction.
+
+## Project website
+
+`docs/index.html` is a self-contained static site covering the problem, method, results, engineering and team.
+It has light and dark themes and works on phones. To publish it for free with GitHub Pages: open
+**Settings → Pages**, set *Source* to **Deploy from a branch**, choose branch **main** and folder **/docs**, then
+**Save**. The site appears at `https://amirkapopa.github.io/TrafficTrak/` within a minute or two.
