@@ -143,6 +143,7 @@ footer a { color: var(--ink-2); }
       <a href="#how">How it works</a>
       <a href="#events">Events</a>
       <a href="#risk">Accident risk</a>
+      <a href="#challenge">Challenge camera</a>
       <a href="#results">Results</a>
       <a href="#engineering">Engineering</a>
       <a href="#team">Team</a>
@@ -166,9 +167,9 @@ footer a { color: var(--ink-2); }
     </div>
     <div class="stats">
       <div class="stat"><b>14</b><span>event types, each with an explicit rule</span></div>
-      <div class="stat"><b>≤ 1.8×</b><span>video length to process, CPU only (limit 3×)</span></div>
+      <div class="stat"><b>2.0×</b><span>4K video length to process, CPU only (limit 3×)</span></div>
       <div class="stat"><b>137 MB</b><span>of open model weights (limit 5 GB)</span></div>
-      <div class="stat"><b>66</b><span>automated tests</span></div>
+      <div class="stat"><b>70</b><span>automated tests</span></div>
     </div>
   </div>
 </header>
@@ -214,11 +215,11 @@ footer a { color: var(--ink-2); }
           <tr><td>wrong_way</td><td>Sustained heading opposite to the lane or learned traffic direction</td><td><span class="pill on"><span>Active</span></span></td></tr>
           <tr><td>stopped_vehicle</td><td>Still for ≥ 10 s on the road while other traffic passes it (not a signal queue)</td><td><span class="pill on"><span>Active</span></span></td></tr>
           <tr><td>congestion</td><td>A whole direction of traffic crawling or standing for ≥ 30 s</td><td><span class="pill on"><span>Active</span></span></td></tr>
-          <tr><td>road_obstacle</td><td>Animals on the carriageway; debris via background comparison once the road is calibrated</td><td><span class="pill on"><span>Active</span></span></td></tr>
-          <tr><td>red_light</td><td>Vehicle front crosses the stop line while the traffic light has been red</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
-          <tr><td>stop_line</td><td>Vehicle stops past the stop line on red, until the light turns green</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
-          <tr><td>jaywalking</td><td>Pedestrian on the carriageway outside a crossing</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
-          <tr><td>failure_to_yield</td><td>Vehicle drives through a crossing while a pedestrian is on it</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
+          <tr><td>road_obstacle</td><td>Animals on the carriageway (background-change debris detector available, off by default at this busy scene)</td><td><span class="pill on"><span>Active</span></span></td></tr>
+          <tr><td>red_light</td><td>Vehicle front crosses the stop line while the traffic light has been red</td><td><span class="pill cal"><span>Off: signal phases unknown</span></span></td></tr>
+          <tr><td>stop_line</td><td>Vehicle stops past the stop line on red, until the light turns green</td><td><span class="pill cal"><span>Off: signal phases unknown</span></span></td></tr>
+          <tr><td>jaywalking</td><td>Pedestrian on the carriageway outside a crossing; standing riders whose scooter was not detected are excluded</td><td><span class="pill on"><span>Active · calibrated</span></span></td></tr>
+          <tr><td>failure_to_yield</td><td>Moving vehicle drives through a crossing with a walking pedestrian on the zebra right in front of it</td><td><span class="pill on"><span>Active · calibrated</span></span></td></tr>
           <tr><td>solid_line_crossing</td><td>Wheel positions change sides of a solid marking</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
           <tr><td>illegal_turn</td><td>Trajectory from a prohibited "from" zone into its "to" zone</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
           <tr><td>illegal_u_turn</td><td>Heading reverses ≥ 150° where U-turns are prohibited</td><td><span class="pill cal"><span>Needs calibration</span></span></td></tr>
@@ -228,7 +229,8 @@ footer a { color: var(--ink-2); }
     </div>
     <div class="legend">
       <span><span class="pill on"><span>Active</span></span> works on any video</span>
-      <span><span class="pill cal"><span>Needs calibration</span></span> switches on once the lanes, stop line or crossing are drawn in the calibration tool</span>
+      <span><span class="pill on"><span>Active · calibrated</span></span> uses the crossings measured on the challenge camera</span>
+      <span><span class="pill cal"><span>Needs calibration</span></span> switches on once the matching road markings are drawn in the calibration tool</span>
     </div>
   </div>
 </section>
@@ -248,6 +250,51 @@ footer a { color: var(--ink-2); }
       own; only agreeing signals cross 0.5. An alarm must also hold for half a second, so one noisy frame cannot
       trigger it. Pairs of objects of very different sizes are ignored, because they are at different distances
       from the camera and only look close in the picture.</p>
+  </div>
+</section>
+
+<section id="challenge">
+  <div class="wrap">
+    <h2>On the challenge camera</h2>
+    <p class="sub">The organisers' sample is a 4K view of a signal-controlled intersection in Tashkent at dusk:
+      a divided avenue, three zebra crossings, traffic lights and a lot of pedestrians. We measured that the camera
+      never moves (0 px shift, 0° rotation across the clip), so everything calibrated on the sample holds for the
+      test videos.</p>
+    <div class="grid2">
+      <figure>
+        <img src="assets/challenge_calibration.jpg" alt="Empty-road view of the intersection with the three crossings outlined and the driven road area shaded green" loading="lazy" width="1280" height="720">
+        <figcaption><b>Calibrated scene.</b> The three zebra crossings (white) are measured on the paint, and the islands
+          are marked as pedestrian refuges. The road area (green) is learned from where 191 tracked vehicles actually
+          drove.</figcaption>
+      </figure>
+      <figure>
+        <img src="assets/challenge_failure_to_yield.jpg" alt="White car driving across a zebra crossing with three pedestrians walking right in front of it" loading="lazy" width="1280" height="723">
+        <figcaption><b>Detected: failure to yield.</b> A car turns through the crossing while pedestrians walk on the
+          zebra right in front of it (38.9–40.5 s).</figcaption>
+      </figure>
+    </div>
+    <div class="grid2" style="margin-top:24px">
+      <div class="card">
+        <h3>From 70 alerts to 4, by checking every one</h3>
+        <p style="margin-bottom:16px">Every alert was checked against the video. Grey bars are alerts that turned out
+          to be false; the blue bar is the final output, where every detection was confirmed on the frames.</p>
+        <div class="bars" role="img" aria-label="Alerts on the sample video: first run 6 false; after calibrating crossings about 70 mostly false; final version 4 confirmed">
+          <div class="barrow"><span>First run</span><div class="track"><div class="used" style="width:8.6%;background:var(--ink-3)"></div></div><span class="num">6 false</span></div>
+          <div class="barrow"><span>Crossings calibrated</span><div class="track"><div class="used" style="width:100%;background:var(--ink-3)"></div></div><span class="num">~70</span></div>
+          <div class="barrow"><span>Final</span><div class="track"><div class="used" style="width:5.7%"></div></div><span class="num">4 confirmed</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>What the real footage taught us</h3>
+        <ul class="clean">
+          <li>Cars waiting at a red light are not "stopped vehicles": places where vehicles normally stop are learned and skipped.</li>
+          <li>A 60-second red-light queue is not congestion: it must last at least 90 s.</li>
+          <li>Turning looks like swerving: a near miss now needs hard braking and a real collision course.</li>
+          <li>Pedestrians waiting at the kerb are not "on" the crossing: they must be walking on the zebra, right in front of the car.</li>
+          <li>A delivery rider waiting in the queue looked like a jaywalker (the detector missed the scooter): squat, stationary "people" in the vehicle queue are now treated as riders.</li>
+        </ul>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -311,7 +358,7 @@ footer a { color: var(--ink-2); }
         cut work before the 3× limit. They never trigger on the target GPU.</p></div>
       <div class="card"><h3>Open and offline</h3><p>YOLOX (Apache-2.0) weights are downloaded once and checksummed. No paid
         API or online service is used at any point.</p></div>
-      <div class="card"><h3>Tested</h3><p>66 tests cover at least one scenario for every event type, output validity,
+      <div class="card"><h3>Tested</h3><p>70 tests cover at least one scenario for every event type, output validity,
         runtime safety and the causality of the risk score.</p></div>
       <div class="card"><h3>Tools for people</h3><p>A click-to-draw calibration page, a review tool that turns checked
         detections into labels, and an upload demo.</p></div>
@@ -331,7 +378,8 @@ footer a { color: var(--ink-2); }
     <div class="card" style="margin-top:24px">
       <h3>Honest limitations</h3>
       <ul class="clean">
-        <li>Seven event types need the camera's road layout calibrated before they can fire.</li>
+        <li>Red light and stop line stay off: which signal controls which stop line was not provided, and a wrong guess would cost two whole classes.</li>
+        <li>Solid-line, turn and U-turn rules need road markings that were not provided for this camera.</li>
         <li>The detector is trained on everyday photos; it struggles with cameras that look straight down at the road.</li>
         <li>Without a ground-plane calibration, speeds are estimated in the image, so they are noisier far from the camera.</li>
         <li>Thresholds are principled defaults; tuning them needs labelled footage from this camera.</li>
