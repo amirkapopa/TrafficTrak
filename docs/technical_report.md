@@ -45,7 +45,7 @@ decides is explicit and auditable.
    * rule violations: wrong-way driving, a pedestrian on the road, running a red.
 
    A logistic combination is built so that no single cue crosses 0.5. Fast
-   attack, slow decay and a 0.3 s hysteresis keep one noisy frame from
+   attack, slow decay and a 0.5 s hysteresis keep one noisy frame from
    raising an alarm.
 
 **Engineering.**
@@ -53,7 +53,7 @@ decides is explicit and auditable.
   gives the same output.
 * Corrupt, missing or empty videos and missing weights degrade to an empty
   result and never crash the harness.
-* 66 unit tests, including one synthetic scenario per event class and a
+* 63 unit tests, including one synthetic scenario per event class and a
   causality test for Part B, plus checks on real street footage.
 * An upload demo with annotated playback, a clickable timeline and the risk curve.
 * Weights: 137 MB.

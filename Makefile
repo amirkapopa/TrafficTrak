@@ -2,6 +2,8 @@
 PY ?= python3
 VIDEOS ?= samples
 PRED ?= predictions_samples.json
+TEAM ?= TrafficTrak
+LABELS ?= labels/dev_labels.json
 
 .PHONY: help install install-cpu install-demo weights test lint check predict validate visualize eda prior candidates dev-eval calibrate demo docker
 
@@ -23,10 +25,10 @@ lint: ## code-quality checks
 	ruff check .
 check: lint test ## lint + tests
 
-predict: ## run solution.detect_events on every sample video -> $(PRED)
-	$(PY) scripts/run_local.py --videos $(VIDEOS) --out $(PRED)
-validate: ## schema check (+ official `python evaluate.py --pred $(PRED) --validate-only` when evaluate.py exists)
-	$(PY) scripts/validate_predictions.py --pred $(PRED) --videos $(VIDEOS)
+predict: ## official harness on every sample video -> $(PRED)
+	$(PY) run_submission.py --videos $(VIDEOS) --out $(PRED) --team $(TEAM)
+validate: ## official format check: evaluate.py --validate-only
+	$(PY) evaluate.py --pred $(PRED) --validate-only
 visualize: ## predictions + risk curves + annotated videos + timelines in outputs/
 	$(PY) scripts/run_local.py --videos $(VIDEOS) --out $(PRED) --risk --visualize
 eda: ## sample-video EDA in outputs/eda
@@ -38,8 +40,8 @@ calibrate: ## browser-based geometry calibration tool (outputs/calibration/calib
 	$(PY) scripts/calibrate_geometry.py render --image outputs/eda/reference_median.jpg
 candidates: ## candidate clips + review.csv for manual annotation
 	$(PY) scripts/annotate_candidates.py mine --videos $(VIDEOS)
-dev-eval: ## score against human-reviewed labels/dev_labels.json
-	$(PY) scripts/eval_dev.py --pred $(PRED) --labels labels/dev_labels.json
+dev-eval: ## official metric against human-reviewed labels ($(LABELS))
+	$(PY) evaluate.py --pred $(PRED) --gt $(LABELS) --per-video
 demo: ## Streamlit upload demo
 	streamlit run demo/app.py
 docker: ## build the offline evaluation image

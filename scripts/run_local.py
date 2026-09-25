@@ -1,13 +1,12 @@
-"""Run the submission on a set of videos and write a predictions JSON.
+"""Development runner with visual outputs (the official run is run_submission.py).
 
-    python scripts/run_local.py --videos samples/ --out predictions_samples.json
-    python scripts/run_local.py --videos samples/ --risk --visualize   # + risk CSV, annotated video, timeline
+    python scripts/run_local.py --videos samples/ --risk --visualize
+      -> outputs/vis/<video>_annotated.mp4, _timeline.png, _events.json,
+         outputs/risk/<video>.csv, outputs/run_report.json (timings)
 
-The predictions file maps each video file name to its segment list:
-    {"clip01.mp4": [[12.4, 19.8, "stopped_vehicle"], ...], ...}
-NOTE: the official run_submission.py was not available; if it expects a
-different container format, only this writer needs to change - the segment
-lists come straight from solution.detect_events.
+The predictions file uses the official format, so it can be scored directly:
+    {"team": ..., "videos": {"clip.mp4": {"events": [[s, e, label], ...], "risk": [[t, p], ...]}}}
+    python evaluate.py --pred <out> --gt labels/dev_labels.json --per-video
 """
 
 import argparse
@@ -35,6 +34,7 @@ def main() -> int:
     ap.add_argument("--risk", action="store_true", help="also run the causal RiskEstimator and save per-frame CSVs")
     ap.add_argument("--visualize", action="store_true", help="annotated video + timeline/risk PNGs")
     ap.add_argument("--outdir", default=str(ROOT / "outputs"))
+    ap.add_argument("--team", default="TrafficTrak")
     args = ap.parse_args()
 
     videos = list_videos(args.videos)
@@ -52,7 +52,7 @@ def main() -> int:
         else:
             segs = solution.detect_events(str(v))
         t_a = time.perf_counter() - t0
-        preds[v.name] = segs
+        preds[v.name] = {"events": segs, "risk": []}
         meta = probe(str(v))
         entry = {"duration_sec": round(meta.duration, 3), "part_a_sec": round(t_a, 2), "n_events": len(segs),
                  "problems": validate_segments(segs, meta.duration if meta.duration > 0 else None)}
@@ -73,6 +73,7 @@ def main() -> int:
                 i += 1
             cap.release()
             risk = (np.array(ts), np.array(rs))
+            preds[v.name]["risk"] = [[round(a, 4), round(b, 4)] for a, b in zip(ts, rs)]
             entry["part_b_sec"] = round(time.perf_counter() - t1, 2)
             entry["max_risk"] = round(float(risk[1].max()) if len(rs) else 0.0, 3)
             (outdir / "risk").mkdir(parents=True, exist_ok=True)
@@ -94,7 +95,7 @@ def main() -> int:
         print(f"{v.name}: {len(segs)} events, A {t_a:.1f}s" + (f", B {entry['part_b_sec']:.1f}s" if "part_b_sec" in entry else "")
               + f", video {meta.duration:.1f}s", file=sys.stderr)
     with open(args.out, "w") as fh:
-        json.dump(preds, fh, indent=2)
+        json.dump({"team": args.team, "videos": preds}, fh, indent=1)
     outdir.mkdir(parents=True, exist_ok=True)
     with open(outdir / "run_report.json", "w") as fh:
         json.dump(report, fh, indent=2)
