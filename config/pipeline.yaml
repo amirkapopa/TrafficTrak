@@ -150,6 +150,7 @@ classes:
     road_margin: 0.15                # scale units inside the carriageway edge
     rider_overlap: 0.3
     crossing_buffer: 1.5             # scale units of slack around crossings (people step just beside the zebra)
+    rider_max_aspect: 2.2            # standing 'person' with a squatter box = rider whose scooter was not detected
   failure_to_yield:
     enabled: true
     min_depth_on_crossing: 0.4       # pedestrian this far (own scale units) inside the zebra, not at its kerb end

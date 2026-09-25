@@ -74,7 +74,7 @@ python evaluate.py --pred predictions.json --gt ground_truth.json
 # Python 3.10+ ; GPU box with CUDA 12 + cuDNN 9 (onnxruntime-gpu)
 pip install -r requirements.txt -r requirements-dev.txt     # CPU only: requirements-cpu.txt
 bash weights/download.sh                                      # 137 MB, SHA-256 verified; do this BEFORE going offline
-make check                                                    # ruff + 69 unit tests
+make check                                                    # ruff + 70 unit tests
 
 # with the sample videos + camera.md in samples/
 make prior          # learn the scene prior (traffic directions, road area) from the samples
@@ -179,8 +179,8 @@ frames, so `end ≤ video_duration` always holds.
 | `accident` | raw-footprint contact at compatible depth + prior closing speed + abrupt deceleration + (struck-party velocity jolt, heading jolt or pedestrian fall) + both slow afterwards; end when all stop | nothing | **yes** |
 | `near_miss` | TTC < 1 s with closing ≥ 1.5 units/s + hard braking or swerve onset; no contact; end when separated and not closing | nothing | **yes** |
 | `road_obstacle` | (a) animal tracks on the carriageway; (b) persistent, static, unexplained foreground vs. empty-road background | (a) carriageway (learned OK); (b) calibrated carriageway or `obstacle_regions` | animals only |
-| `jaywalking` | pedestrian ground point inside carriageway (with margin), outside crossings and sidewalks, not a rider or occupant, ≥ 1 s | calibrated carriageway | no |
-| `failure_to_yield` | moving vehicle inside a crossing while a pedestrian is on or entering it nearby | crossings | no |
+| `jaywalking` | pedestrian ground point inside carriageway (with margin), outside crossings (+1.5 body-scale slack) and sidewalks, not a rider, occupant or standing rider with an undetected scooter, ≥ 1 s | calibrated carriageway | **calibrated for the challenge camera** |
+| `failure_to_yield` | vehicle driving (≥ 1 scale unit/s) through a crossing while a walking pedestrian is well onto the zebra, within 1.5 vehicle lengths in front of it | crossings | **calibrated for the challenge camera** |
 | `red_light` | front point crosses the stop line along the approach while the signal has been red for ≥ 0.4 s, then enters the intersection; end on exit | stop line + signal ROI (+ intersection) | no |
 | `stop_line` | vehicle crosses the stop line and stops before the intersection while red; end at green | stop line + signal ROI | no |
 | `solid_line_crossing` | inset bottom corners (wheel proxies) change side of a solid polyline; end when all points are across | solid lines | no |
@@ -346,7 +346,7 @@ a background thread. If a machine turns out slower than budget, set
 make check     # ruff (pyflakes, pycodestyle, bugbear, isort, pyupgrade) + pytest
 ```
 
-The 69 tests cover:
+The 70 tests cover:
 * geometry: normalised conversion, containment, crossings, config validation
   and safe defaults;
 * at least one synthetic trajectory scenario per event class, including
@@ -375,14 +375,16 @@ about 70 times. The fixes, each covered by a regression test:
 * **congestion:** must last at least 90 s;
 * **accident / near_miss:** ignore far-field vehicles;
 * **failure_to_yield:** only a walking pedestrian well onto the zebra, within
-  1.5 vehicle lengths in front of a moving vehicle.
+  1.5 vehicle lengths in front of a moving vehicle;
+* **jaywalking:** 1.5 body-scale slack around crossings. A standing "person"
+  with a squat box, or one waiting in a vehicle stopping place, is treated as
+  a rider whose scooter the detector missed. The last false alarm was a
+  delivery rider waiting in the queue.
 
-The final output is 5 events:
-* 4 `failure_to_yield`: cars turning through the lower crossing while
-  pedestrians walk on it;
-* 1 `jaywalking`: a person standing in the avenue lanes.
+The final output is 4 `failure_to_yield` events: cars turning through the
+lower crossing while pedestrians walk on it. Each was checked on the frames.
 
-Official harness: 256 s against a 383 s budget on a 4-core CPU, VALID, no
+Official harness: 250 s against a 383 s budget on a 4-core CPU, VALID, no
 false risk alarms.
 
 **Real-footage checks** (clips used locally only, not redistributed):

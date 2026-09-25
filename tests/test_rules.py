@@ -319,3 +319,13 @@ def test_stop_where_others_also_stop_is_not_a_stopped_vehicle():
     passers = lane_traffic(100, 560, np.arange(0, 60, 3.0))
     events, _, _ = run([waiter] + earlier + passers, 65.0, geometry=FULL_ROAD)
     assert "stopped_vehicle" not in labels(events)
+
+
+def test_standing_rider_with_undetected_scooter_is_not_jaywalking():
+    """Regression from the sample camera: a delivery rider waiting in the vehicle
+    queue was detected only as a 'person' (squat box: person + scooter)."""
+    rider = make_track(1, "person", linear((400, 450), (0, 0), 0), 0, 15, size=(45, 90))   # h/w = 2.0
+    walker = make_track(2, "person", linear((300, 250), (0, 40), 0), 0, 10, size=(30, 80))
+    events, _, _ = run([rider, walker], 20.0, geometry=PED_GEO)
+    jw = of(events, "jaywalking")
+    assert len(jw) == 1 and jw[0].tracks == (2,)

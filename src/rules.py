@@ -391,9 +391,27 @@ def rule_jaywalking(ctx: SceneContext) -> list[RawEvent]:
         on = fill_gaps(on, ctx.n(0.5))
         on = drop_short(on, ctx.n(float(c.get("min_duration_sec", 1.0))))
         for i0, i1 in runs(on):
+            if _undetected_rider(ctx, s, i0, i1, c):
+                continue
             t0, t1 = ctx.span(s, i0, i1)
             out.append(RawEvent("jaywalking", t0, t1, 0.7, (s.tid,)))
     return out
+
+
+def _undetected_rider(ctx: SceneContext, s: TrackSeries, i0: int, i1: int, c: dict) -> bool:
+    """A 'person' standing still in the road whose scooter / bike was not detected.
+
+    Seen on the sample camera: a delivery rider waiting at the stop line in the
+    vehicle queue.  Such a box is squat (person + vehicle; pedestrians here have
+    height/width 2.25-2.9) or it waits where vehicles normally stop."""
+    stationary = float(ctx.feat.get("stationary_speed", 0.12)) * 2
+    if float(np.mean(s.speed_n[i0:i1 + 1] < stationary)) < 0.8:
+        return False  # walking across the road: a real pedestrian
+    aspect = float(np.median(s.h[i0:i1 + 1] / np.maximum(s.w[i0:i1 + 1], 1.0)))
+    if aspect < float(c.get("rider_max_aspect", 2.2)):
+        return True
+    x, y = float(np.median(s.gx[i0:i1 + 1])), float(np.median(s.gy[i0:i1 + 1]))
+    return ctx.flow.stop_count(x, y, ctx.width, ctx.height) >= 1
 
 
 def rule_failure_to_yield(ctx: SceneContext) -> list[RawEvent]:

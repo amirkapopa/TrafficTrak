@@ -53,7 +53,7 @@ decides is explicit and auditable.
   gives the same output.
 * Corrupt, missing or empty videos and missing weights degrade to an empty
   result and never crash the harness.
-* 69 unit tests, including one synthetic scenario per event class and a
+* 70 unit tests, including one synthetic scenario per event class and a
   causality test for Part B, plus checks on real street footage.
 * An upload demo with annotated playback, a clickable timeline and the risk curve.
 * Weights: 137 MB.
