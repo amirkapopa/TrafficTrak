@@ -11,21 +11,18 @@ from solution import detect_events, RiskEstimator, CLASSES
 detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 ```
 
-> **Read this first: missing inputs.** When this repository was built, the
-> challenge repository had **no `samples/*.mp4`, no `samples/camera.md`,
-> no starter `solution.py`, `run_submission.py` or `evaluate.py`**. As a result:
+> **Status of the challenge inputs.** The organisers' `run_submission.py`
+> and `evaluate.py` (WIUT Hackathon 2026 starter kit) are in the repository
+> root, **unmodified**. The starter README and the `solution.py` template are
+> kept for reference in `docs/challenge/`. Still missing: `samples/*.mp4`,
+> `samples/camera.md`, the starter `examples/` folder and the task description.
+> Until they arrive:
 > * `config/camera_geometry.yaml` ships **empty and uncalibrated**. No lane
 >   coordinates were invented. Rules that need a stop line, crossing,
 >   signal or marking stay silent until a human calibrates them
 >   ([Calibrating the scene](#calibrating-the-scene)).
-> * `predictions_samples.json` cannot exist yet. Create it with
->   `make predict` once the sample videos are in `samples/`.
-> * `run_submission.py` and `evaluate.py` are **not** included. The organisers'
->   files must be copied in unchanged. `make validate` calls
->   `python evaluate.py --pred predictions_samples.json --validate-only`
->   automatically when `evaluate.py` is present. The container format of
->   `scripts/run_local.py` (`{video_file_name: segments}`) is an assumption.
->   `solution.py` itself follows the required interface exactly.
+> * `predictions_samples.json` and `config/scene_prior.npz` do not exist yet.
+>   Create them with `make prior predict` once the videos are in `samples/`.
 
 ---
 
@@ -54,12 +51,13 @@ detect_events("clip.mp4")      # [[12.4, 19.8, "stopped_vehicle"], ...]
 # Python 3.10+ ; GPU box with CUDA 12 + cuDNN 9 (onnxruntime-gpu)
 pip install -r requirements.txt -r requirements-dev.txt     # CPU only: requirements-cpu.txt
 bash weights/download.sh                                      # 137 MB, SHA-256 verified; do this BEFORE going offline
-make check                                                    # ruff + 66 unit tests
+make check                                                    # ruff + 63 unit tests
 
-# put the organisers' videos + camera.md into samples/, and run_submission.py / evaluate.py into the repo root
-make predict        # solution.detect_events on every sample -> predictions_samples.json
-make validate       # own schema checks + `python evaluate.py --pred predictions_samples.json --validate-only`
-python run_submission.py ...   # the organisers' harness (unchanged; see its own usage)
+# with the sample videos + camera.md in samples/
+make prior          # learn the scene prior (traffic directions, road area) from the samples
+make predict        # = python run_submission.py --videos samples --out predictions_samples.json --team TrafficTrak
+make validate       # = python evaluate.py --pred predictions_samples.json --validate-only
+make dev-eval       # = python evaluate.py --pred predictions_samples.json --gt labels/dev_labels.json --per-video
 ```
 
 **macOS (Apple Silicon or Intel, CPU only)**: use Python 3.11 or 3.12. The
@@ -113,8 +111,8 @@ docker run --gpus all --network none -v $PWD/samples:/data traffictrak   # -> /d
 | `src/pipeline.py` | Part A orchestration |
 | `src/risk.py` | causal `RiskEstimator` |
 | `src/visualize.py` | geometry / flow overlays, annotated video, timeline and risk-curve charts |
-| `src/metrics.py` | local tIoU metrics (approximation of the unknown official metric) |
-| `scripts/` | `run_local`, `validate_predictions`, `analyze_samples`, `calibrate_geometry`, `annotate_candidates`, `eval_dev` |
+| `run_submission.py`, `evaluate.py` | organisers' harness and official metric (unmodified, excluded from linting) |
+| `scripts/` | `run_local` (visual outputs), `analyze_samples` (EDA + scene prior), `calibrate_geometry`, `annotate_candidates` (review → official ground truth) |
 | `demo/app.py` | Streamlit upload demo |
 | `tests/` | geometry, rules (one synthetic scenario per class), segments, schema, causal risk, components, demo |
 | `docs/technical_report.md` | one-page public technical report |
@@ -186,15 +184,19 @@ kinematic histories. For every nearby road-user pair it computes:
 below 0.5, for example a pure maximal conflict gives about 0.27. Only agreeing
 cues, such as a conflict plus evasive action, exceed 0.5. The output follows
 the hazard with fast attack (τ = 0.3 s) and slow decay (τ = 2 s). Values ≥ 0.5
-are released only after the raw hazard has stayed ≥ 0.5 for 0.3 s
-(hysteresis), then held until the smoothed value drops below 0.3.
+are released only after the raw hazard has stayed ≥ 0.5 for 0.5 s
+(hysteresis), then held until the smoothed value drops below 0.3. Pairs whose
+box sizes differ by more than 2.5× are skipped: they are at clearly different
+depths, and their convergence in the image is a perspective effect. Both
+guards were added after they removed false alarms on real footage.
 
 **Calibration status:** the weights are hand-set and not fitted, because no
-labelled data exists. On the synthetic head-on test the alarm is raised 0.6 s
-before contact; parallel traffic stays below 0.02. `scripts/eval_dev.py`
-reports ROC-AUC and Brier score against human-reviewed labels, so the
-weights can be refitted (for example by Platt scaling) once clips are
-annotated.
+labelled data exists. On the synthetic head-on test the alarm is raised
+0.4 s before contact; parallel traffic stays below 0.02. On the real test
+clips the official alarm count is 0 (peaks 0.12–0.49). `make dev-eval`
+reports the official Part B AP, alarm F1 and mTTA against human-reviewed
+labels, so the weights can be refitted once clips are annotated. The metric
+rewards precision: each false alarm lowers alarm F1.
 
 ## Calibrating the scene
 
@@ -320,7 +322,7 @@ a background thread. If a machine turns out slower than budget, set
 make check     # ruff (pyflakes, pycodestyle, bugbear, isort, pyupgrade) + pytest
 ```
 
-The 66 tests cover:
+The 63 tests cover:
 * geometry: normalised conversion, containment, crossings, config validation
   and safe defaults;
 * at least one synthetic trajectory scenario per event class, including
@@ -340,11 +342,13 @@ The 66 tests cover:
 | OpenCV `vtest.avi`: fixed camera, pedestrian plaza, 79.5 s | no events, maximum risk 0.09 |
 | `ahmetozlu/vehicle_counting_tensorflow` `input_video.mp4` (MIT): angled street camera, parked cars, 37.7 s | 20 tracks, no events; parked kerb-side cars correctly *not* reported as `stopped_vehicle` |
 | same clip with seconds 8–20 appended **time-reversed** after 25 s, plus a scene prior learned from the original clip | exactly one `wrong_way` at 25.17–36.92 s (true start 24.99 s) |
+| all three run through the **official** `run_submission.py` + `evaluate.py` (CPU) | every video within the 3× time budget (≤ 1.8×), output VALID, Score A = 1.0 on the hand-labelled set, 0 false risk alarms |
 | `andrewssobral/simple_vehicle_counting` `video.avi`: near-overhead highway view, 320×176 | the COCO detector barely sees cars from directly above (see limitations) |
 
-These checks found and fixed two real false positives:
+These checks found and fixed four real false positives:
 * a car stopping beside a kerb-side parked car was flagged as a `near_miss`, because perspective made them look like they were closing on each other;
-* a fixed learned-road threshold that failed once a prior inflated the counts.
+* a fixed learned-road threshold that failed once a prior inflated the counts;
+* two risk alarms: one from a near and a far car converging only in the image, one from a 0.3 s spike.
 
 Corrupt AVIs and missing files are handled gracefully.
 
@@ -356,12 +360,18 @@ ground truth. To tune on them, a person must review candidates:
 ```bash
 make candidates                     # loose thresholds -> outputs/candidates/*.mp4 + review.csv
 # fill in accept / corrected label / start / end; add `manual` rows for missed events
-python scripts/annotate_candidates.py labels --review outputs/candidates/review.csv   # -> labels/dev_labels.json
-make visualize dev-eval             # F1 @ tIoU 0.3/0.5/0.7 per class, risk AUC/Brier
+python scripts/annotate_candidates.py labels --review outputs/candidates/review.csv --videos samples/
+                                    # -> labels/dev_labels.json in the official ground-truth format
+make predict dev-eval               # official Part A F1 @ tIoU 0.3/0.5/0.7 and Part B AP / alarm F1 / mTTA
 ```
 
-`src/metrics.py` approximates the official metric with greedy one-to-one
-tIoU matching. The organisers' `evaluate.py` is authoritative.
+**What the official metric implies** (`evaluate.py`):
+* Part A averages F1 over every class in the ground truth **or in the
+  predictions**. A single false event of a class that never occurs adds that
+  class with F1 = 0, so precision-first rules are the right design.
+* Part B scores the risk curve only if the test set contains accidents.
+* Model score = 0.7 × A + 0.3 × B. The hackathon elimination score is
+  0.6 × model + 0.25 × website + 0.15 × code.
 
 ## Upload demo
 

@@ -224,7 +224,7 @@ class RiskEstimator:
         arm_thr = float(rc.get("arm_threshold", 0.5))
         if h >= arm_thr:
             self.high_since = t if self.high_since is None else self.high_since
-            if t - self.high_since >= float(rc.get("arm_hold_sec", 0.3)):
+            if t - self.high_since >= float(rc.get("arm_hold_sec", 0.5)):
                 self.armed = True
         else:
             self.high_since = None
@@ -330,6 +330,9 @@ class RiskEstimator:
                 tb, gb, kb, eb, vb = items[j]
                 if ga == "person" and gb == "person":
                     continue
+                ratio = max(ka.scale, kb.scale) / max(min(ka.scale, kb.scale), 1e-6)
+                if ratio > float(rc.get("max_scale_ratio", 2.5)):
+                    continue  # very different depths: image-plane convergence is perspective, not a conflict
                 s = 0.5 * (ka.scale + kb.scale)
                 pa, pb = np.array(ka.point), np.array(kb.point)
                 rel = (pb - pa) / s

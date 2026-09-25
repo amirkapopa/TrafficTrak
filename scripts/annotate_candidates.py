@@ -10,9 +10,11 @@ Step 2 - a human fills review.csv: accept = y/n, optionally corrects label /
 start / end (seconds in the FULL video), and may add rows with
 candidate_id = manual for events the system missed.
 
-Step 3 - build development labels:
-    python scripts/annotate_candidates.py labels --review outputs/candidates/review.csv
-  -> labels/dev_labels.json   ({video: [[start, end, label], ...]})
+Step 3 - build development labels in the official ground-truth format:
+    python scripts/annotate_candidates.py labels --review outputs/candidates/review.csv --videos samples/
+  -> labels/dev_labels.json   ({video: {"duration": s, "fps": f, "events": [[start, end, label], ...]}})
+Every video in --videos is treated as reviewed (no accepted rows -> "events": []).
+Score with:  python evaluate.py --pred predictions_samples.json --gt labels/dev_labels.json --per-video
 
 Only human-accepted rows become labels: unlabelled sample videos are never
 treated as ground truth.
@@ -30,6 +32,7 @@ from _bootstrap import ROOT, list_videos
 from src.config import load_config
 from src.pipeline import analyze_video
 from src.segments import CLASSES, RawEvent, finalize, to_output
+from src.video import probe
 from src.visualize import C_ALERT, C_TRACK, _label, to_browser_mp4
 
 LOOSE = {
@@ -124,10 +127,20 @@ def labels(args) -> int:
                 continue
             per_video.setdefault(r["video"], []).append(RawEvent(label, s, e))
     cfg = {"segments": {"merge_gap_sec": {"default": 0.0}, "min_duration_sec": {"default": 0.0}}}
-    out = {v: to_output(finalize(evs, 1e9, cfg)) for v, evs in sorted(per_video.items())}
+    out = {}
+    for v in list_videos(args.videos):
+        meta = probe(str(v))
+        if not meta.ok:
+            print(f"skipping unreadable {v.name}", file=sys.stderr)
+            continue
+        out[v.name] = {"duration": round(meta.duration, 3), "fps": round(meta.fps, 3),
+                       "events": to_output(finalize(per_video.pop(v.name, []), meta.duration, cfg))}
+    for name in per_video:
+        print(f"warning: {name} is in the review file but not in {args.videos} - skipped", file=sys.stderr)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(out, indent=2))
-    print(f"-> {args.out}: {sum(len(v) for v in out.values())} human-verified events in {len(out)} videos", file=sys.stderr)
+    Path(args.out).write_text(json.dumps(out, indent=1))
+    n = sum(len(v["events"]) for v in out.values())
+    print(f"-> {args.out}: {n} human-verified events in {len(out)} videos", file=sys.stderr)
     return 0
 
 
@@ -142,6 +155,7 @@ def main() -> int:
     lb = sub.add_parser("labels")
     lb.add_argument("--review", default=str(ROOT / "outputs" / "candidates" / "review.csv"))
     lb.add_argument("--out", default=str(ROOT / "labels" / "dev_labels.json"))
+    lb.add_argument("--videos", nargs="+", default=[str(ROOT / "samples")])
     args = ap.parse_args()
     return mine(args) if args.cmd == "mine" else labels(args)
 

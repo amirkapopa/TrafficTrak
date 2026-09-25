@@ -223,6 +223,7 @@ risk:
   ttc_scale_sec: 3.0
   conflict_radius: 0.8
   max_pair_distance: 25.0
+  max_scale_ratio: 2.5     # box-size ratio above which two objects are at clearly different depths
   min_history_sec: 0.4
   history_sec: 2.0
   closing_ref: 2.0
@@ -236,6 +237,6 @@ risk:
   tau_up_sec: 0.3
   tau_down_sec: 2.0
   arm_threshold: 0.5
-  arm_hold_sec: 0.3
+  arm_hold_sec: 0.5
   disarm_threshold: 0.3
   unarmed_cap: 0.49
