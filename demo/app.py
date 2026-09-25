@@ -109,11 +109,12 @@ if res:
             sel = alt.selection_point(name="ev", fields=["start"], on="click")
             chart = (alt.Chart(events_df).mark_bar(color=SERIES, cornerRadius=4, height=12)
                      .encode(x=alt.X("start:Q", title="time (s)", scale=alt.Scale(domain=[0, a.duration])), x2="end:Q",
-                             y=alt.Y("label:N", sort=CLASSES, scale=alt.Scale(domain=CLASSES), title=None),
+                             y=alt.Y("label:N", sort=CLASSES, scale=alt.Scale(domain=CLASSES), title=None,
+                                     axis=alt.Axis(labelOverlap=False, labelLimit=160)),
                              tooltip=["label", alt.Tooltip("start:Q", format=".2f"), alt.Tooltip("end:Q", format=".2f"),
                                       "evidence"],
                              opacity=alt.condition(sel, alt.value(1.0), alt.value(0.55)))
-                     .add_params(sel).properties(height=340))
+                     .add_params(sel).properties(height=14 * 26))
             ev = st.altair_chart(chart, use_container_width=True, on_select="rerun", key="timeline")
             picked = (ev or {}).get("selection", {}).get("ev") or []
             if picked:
