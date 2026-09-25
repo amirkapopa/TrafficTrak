@@ -87,16 +87,25 @@ def test_wrong_way_with_calibrated_lanes():
 
 
 # --------------------------------------------------------------------------- congestion
+def _jam(start, end, first_tid=200):
+    return [make_track(first_tid + i, "car", piecewise([(start, x, 420), (end, x + 350, 420), (end + 5, x + 1500, 420)]),
+                       start, end + 5) for i, x in enumerate(range(100, 900, 100))]
+
+
 def test_congestion_from_standing_queue():
     movers = lane_traffic(1, 400, np.arange(0, 28, 2.0)) + lane_traffic(50, 450, np.arange(1, 28, 2.0))
-    jam = []
-    for i, x in enumerate(range(100, 900, 100)):
-        jam.append(make_track(200 + i, "car", piecewise([(30, x, 420), (100, x + 350, 420), (105, x + 1500, 420)]), 30, 105))
-    events, _, _ = run(movers + jam, 110.0)
+    events, _, _ = run(movers + _jam(30, 130), 140.0)
     cg = of(events, "congestion")
     assert len(cg) == 1
-    assert near(cg[0].start, 30.0, 2.0) and near(cg[0].end, 100.0, 3.0)
+    assert near(cg[0].start, 30.0, 2.0) and near(cg[0].end, 130.0, 3.0)
     assert "stopped_vehicle" not in labels(events)
+
+
+def test_red_light_length_queue_is_not_congestion():
+    """Regression from the sample camera: a ~60 s signal queue is normal, not a jam."""
+    movers = lane_traffic(1, 400, np.arange(0, 28, 2.0)) + lane_traffic(50, 450, np.arange(1, 28, 2.0))
+    events, _, _ = run(movers + _jam(30, 90), 100.0)
+    assert "congestion" not in labels(events)
 
 
 # --------------------------------------------------------------------------- pedestrians
@@ -124,7 +133,7 @@ def test_jaywalking_disabled_without_calibrated_carriageway():
 def test_failure_to_yield():
     geo = {"carriageway": [norm([(0, 300), (W, 300), (W, 600), (0, 600)])],
            "crossings": [{"id": "cw", "polygon": norm([(600, 300), (700, 300), (700, 600), (600, 600)])}]}
-    ped = make_track(1, "person", linear((680, 280), (0, 30), 0), 0, 10, size=(30, 80))
+    ped = make_track(1, "person", linear((680, 380), (0, 30), 0), 0, 9, size=(30, 80))  # in the car's path as it arrives
     car = make_track(2, "car", linear((0, 520), (150, 0), 0), 0, 8)
     late_car = make_track(3, "car", linear((0, 520), (150, 0), 12), 12, 20)  # crossing empty by then
     events, _, _ = run([ped, car, late_car], 25.0, geometry=geo)
@@ -291,3 +300,22 @@ def test_stopping_beside_a_kerb_parked_car_is_not_a_near_miss():
     stopper = make_track(2, "car", piecewise([(0, 300, 450), (2.0, 800, 450), (2.5, 830, 450), (12, 830, 450)]), 0, 12)
     events, _, _ = run([parked, stopper], 14.0, geometry=geo)
     assert "near_miss" not in labels(events)
+
+
+def test_passing_in_opposite_directions_is_not_a_near_miss():
+    """Regression from the sample camera: two cars passing in neighbouring lanes
+    (one braking) are closing in the image but never on a collision course."""
+    a = make_track(1, "car", piecewise([(0, 100, 420), (2.0, 600, 420), (2.6, 660, 420), (6, 700, 420)]), 0, 6)
+    b = make_track(2, "car", linear((1200, 490), (-250, 0), 0), 0, 6)
+    events, _, _ = run([a, b], 8.0)
+    assert "near_miss" not in labels(events)
+
+
+def test_stop_where_others_also_stop_is_not_a_stopped_vehicle():
+    """Regression from the sample camera: a car waiting at a signal where other cars also wait."""
+    waiter = make_track(1, "car", piecewise([(10, 100, 500), (15, 600, 500), (45, 600, 500), (50, 1100, 500)]), 10, 50)
+    earlier = [make_track(5 + k, "car", piecewise([(t, 100, 500), (t + 3, 600, 500), (t + 9, 600, 500), (t + 11, 1100, 500)]), t, t + 11)
+               for k, t in enumerate((0.0, 50.0))]  # each waits 6 s at the same spot
+    passers = lane_traffic(100, 560, np.arange(0, 60, 3.0))
+    events, _, _ = run([waiter] + earlier + passers, 65.0, geometry=FULL_ROAD)
+    assert "stopped_vehicle" not in labels(events)

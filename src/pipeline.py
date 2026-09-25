@@ -182,8 +182,11 @@ def analyze_tracks(tracks, cfg: dict, geometry: Geometry, width: int, height: in
     flow = FlowField.from_config(cfg)
     flow.rel_frac = float(cfg.get("scene", {}).get("carriageway_rel_frac", 0.25))
     moving = float(cfg.get("features", {}).get("moving_speed", 0.4))
+    stationary = float(cfg.get("features", {}).get("stationary_speed", 0.12))
+    min_stop = float(cfg.get("scene", {}).get("stop_zone_min_sec", 3.0))
     for s in series:
         flow.add_series(s, width, height, moving)
+        flow.add_stops(s, width, height, stationary, min_stop)
     if prior_flow is not None:
         flow.add_prior(prior_flow, float(cfg.get("scene", {}).get("prior_weight", 1.0)))
     sc = cfg.get("scene", {})

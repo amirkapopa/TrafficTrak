@@ -49,6 +49,7 @@ features:
   moving_speed: 0.40
   crawl_speed: 1.00
   footprint_band: 0.35     # bottom fraction of the box used as ground footprint
+  min_pair_scale_frac: 0.06  # accident / near_miss ignore vehicles smaller than this x frame height (far field)
 
 scene:
   flow_grid: [32, 18]
@@ -56,9 +57,10 @@ scene:
   flow_bins: 16
   min_flow_displacement: 0.25   # scale units per vote step
   prior_path: config/scene_prior.npz
-  background_path: config/background_reference.png
+  background_path: config/background_reference.jpg
   prior_weight: 1.0
   carriageway_min_tracks: 3
+  stop_zone_min_sec: 3.0         # a vehicle standing this long in a cell marks it as a stopping place
   carriageway_rel_frac: 0.25     # ... and at least 25 % of the p90 cell count (scales with the prior)
   direction_group_min_share: 0.12
   direction_group_min_separation_deg: 60
@@ -83,6 +85,9 @@ classes:
     heading_jolt_deg: 25
     impact_window_sec: 1.0
     post_slow_sec: 2.0
+    stop_within_sec: 2.0     # both parties slow to a crawl within this time after contact ...
+    stay_close_sec: 1.5      # ... and stay next to each other (raw footprint gap)
+    stay_close_gap: 0.6
     stop_hold_sec: 1.0
     max_duration_sec: 60
     single_vehicle: false
@@ -92,7 +97,10 @@ classes:
     min_closing_speed: 1.5
     min_speed_before: 1.0
     decel_threshold: 2.0     # scale units / s^2
+    use_swerve: false        # turning at an intersection looks like swerving; braking only
     swerve_rate_deg: 35
+    collision_radius: 0.8    # predicted closest approach must be this small (scale units)
+    horizon_sec: 3.0
     sustain_sec: 0.3
     evasive_window_before_sec: 2.5
     evasive_window_after_sec: 0.5
@@ -134,17 +142,20 @@ classes:
     queue_frac: 0.5
     isolated_min_duration_sec: 45.0
     stop_line_radius: 3.0
+    stop_zone_min_vehicles: 1   # skip places where another vehicle also stood still (queues, bus stops)
   jaywalking:
     enabled: true
     use_learned_carriageway: false   # precision: require a calibrated carriageway
     min_duration_sec: 1.0
     road_margin: 0.15                # scale units inside the carriageway edge
     rider_overlap: 0.3
+    crossing_buffer: 1.5             # scale units of slack around crossings (people step just beside the zebra)
   failure_to_yield:
     enabled: true
-    entering_buffer: 0.6             # scale units around the crossing polygon
-    max_ped_distance: 8.0
-    min_vehicle_speed: 0.4
+    min_depth_on_crossing: 0.4       # pedestrian this far (own scale units) inside the zebra, not at its kerb end
+    max_ped_distance: 1.5        # scale units: pedestrian right in front of the vehicle
+    min_vehicle_speed: 1.0       # driving through, not creeping
+    min_ped_speed: 0.3           # pedestrian actually walking on the crossing
   illegal_turn:
     enabled: true
     onset_deg: 15
@@ -166,12 +177,13 @@ classes:
     capacity_frac: 0.5
     slow_frac: 0.7
     gap_fill_sec: 5.0
-    min_duration_sec: 30.0
+    min_duration_sec: 90.0      # a single red phase at the sample intersection lasts ~60 s
   road_obstacle:
     enabled: true
     animals: true
     animal_min_duration_sec: 1.0
-    static_objects: true             # needs a calibrated carriageway or obstacle_regions
+    static_objects: false            # background-change debris detector: off by default, too many false
+                                     # alarms at a busy signalised intersection (queue "ghosts", shadows)
     sample_every_sec: 0.5
     work_width: 320
     block: 8
