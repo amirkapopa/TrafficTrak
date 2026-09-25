@@ -108,7 +108,7 @@ def analyze_video(video_path: str, cfg: dict | None = None, geometry_path: str |
     reader = FrameReader(video_path, meta.fps, stride, meta.n_frames,
                          int(cfg.get("video", {}).get("max_consecutive_read_failures", 25)),
                          int(cfg.get("runtime", {}).get("prefetch_frames", 48)))
-    budget = float(cfg.get("runtime", {}).get("budget_factor", 2.4))
+    budget = float(cfg.get("runtime", {}).get("budget_factor", 1.4))
     expected = meta.duration if meta.duration > 0 else None
     t_loop = time.perf_counter()
     n_proc = 0

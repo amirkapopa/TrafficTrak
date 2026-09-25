@@ -235,10 +235,18 @@ def get_detector(cfg: dict) -> YoloxOnnxDetector:
         raise FileNotFoundError(
             f"no detector weights found in {weights_dir()} - run `bash weights/download.sh` before evaluation")
     key = (str(path), prefer_gpu, float(dcfg.get("score_threshold", 0.1)), float(dcfg.get("nms_iou", 0.55)))
+    kwargs = dict(prefer_gpu=prefer_gpu, intra_op_threads=int(dcfg.get("intra_op_threads", 0) or 0),
+                  score_threshold=float(dcfg.get("score_threshold", 0.1)), nms_iou=float(dcfg.get("nms_iou", 0.55)),
+                  min_box_area_frac=float(dcfg.get("min_box_area_frac", 2e-5)))
     with _DET_LOCK:
         if key not in _DETECTORS:
-            _DETECTORS[key] = YoloxOnnxDetector(
-                path, prefer_gpu=prefer_gpu, intra_op_threads=int(dcfg.get("intra_op_threads", 0) or 0),
-                score_threshold=float(dcfg.get("score_threshold", 0.1)), nms_iou=float(dcfg.get("nms_iou", 0.55)),
-                min_box_area_frac=float(dcfg.get("min_box_area_frac", 2e-5)))
+            det = YoloxOnnxDetector(path, **kwargs)
+            small = weights_dir() / "yolox_s.onnx"
+            if (str(dcfg.get("model", "auto")) == "auto" and not det.on_gpu and path.name != small.name
+                    and small.is_file()):
+                # CUDA was advertised but the session fell back to the CPU (missing CUDA/cuDNN libraries):
+                # the large model would blow the 3x time budget, so use the small one.
+                log.warning("GPU unavailable at run time - switching detector to %s", small.name)
+                det = YoloxOnnxDetector(small, **kwargs)
+            _DETECTORS[key] = det
         return _DETECTORS[key]

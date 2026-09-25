@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import logging
 import math
+import time
 from collections import deque
 
 import numpy as np
@@ -169,13 +170,11 @@ class RiskEstimator:
         self.sig_hist: dict[str, deque] = {}
         self.last_components = {}
         self.prior_flow = load_scene_prior(self.cfg)[0]
-        det = self._detector
-        on_gpu = bool(getattr(det, "on_gpu", False)) if det is not None else None
-        if on_gpu is None:
-            from .detection import cuda_available
-
-            on_gpu = cuda_available()
+        det = self._get_detector()  # cached after the first video; tells us whether we really run on a GPU
+        on_gpu = bool(getattr(det, "on_gpu", False)) if det is not None else False
         self.detect_every = max(1, int(self.rc.get("detect_every_gpu", 1) if on_gpu else self.rc.get("detect_every_cpu", 3)))
+        self.max_detect_every = max(self.detect_every, int(self.rc.get("max_detect_every", 8)))
+        self.wall_start: float | None = None
 
     # ------------------------------------------------------------------
     def step(self, frame, t_sec: float) -> float:
@@ -198,6 +197,7 @@ class RiskEstimator:
             self.geometry = load_geometry(self.geometry_path, w, h)
         idx = self.frame_no
         self.frame_no += 1
+        self._govern(t)
         if idx % self.detect_every == 0:
             det = self._get_detector()
             if det is not None:
@@ -214,6 +214,21 @@ class RiskEstimator:
                 self._update_signals(frame, t)
                 self.raw = self._hazard(active, t)
         return self._smooth(self.raw, dt, t)
+
+    def _govern(self, t: float) -> None:
+        """Emergency runtime governor.  The harness gives Part A + Part B together
+        3x the video duration; if the estimator itself runs slower than
+        ``budget_factor`` x real time, detect on fewer frames (logged).  Never
+        triggers on the target GPU, so outputs stay deterministic there."""
+        now = time.perf_counter()
+        if self.wall_start is None:
+            self.wall_start = now
+            return
+        if self.frame_no % 50 or t < 3.0 or self.detect_every >= self.max_detect_every:
+            return
+        if now - self.wall_start > float(self.rc.get("budget_factor", 1.3)) * t:
+            self.detect_every += 1
+            log.warning("risk estimator slower than budget - detecting every %d frames", self.detect_every)
 
     # ------------------------------------------------------------------
     def _smooth(self, h: float, dt: float, t: float) -> float:
